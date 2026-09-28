@@ -1,4 +1,4 @@
-"""Central configuration for the educational byte-level GPT project."""
+"""Central configuration for the local subword GPT training project."""
 
 from dataclasses import asdict, dataclass
 from typing import Any, Dict
@@ -10,27 +10,34 @@ class Config:
     dataset_path: str = "training_tokens.bin"
     dataset_source: str = "training_data.txt"
     dataset_meta_path: str = "training_tokens.meta.json"
+    tokenizer_path: str = "tokenizer.json"
+    dataset_dtype: str = "uint16"
     validation_split: float = 0.10
     seed: int = 1337
 
     # Model
-    vocab_size: int = 256
-    context_length: int = 256
+    vocab_size: int = 4096
+    context_length: int = 1024
     embedding_dim: int = 384
-    num_layers: int = 6
+    num_layers: int = 8
     num_heads: int = 6
     feed_forward_dim: int = 1536
-    dropout: float = 0.10
+    dropout: float = 0.05
     bias: bool = True
+    norm_eps: float = 1e-5
+    rope_theta: float = 10000.0
 
     # Training
-    batch_size: int = 16
-    learning_rate: float = 2e-4
+    batch_size: int = 8
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 3e-4
+    min_learning_rate: float = 3e-5
+    warmup_steps: int = 500
     weight_decay: float = 0.1
-    training_steps: int = 5000
-    eval_interval: int = 100
+    training_steps: int = 20000
+    eval_interval: int = 250
     eval_steps: int = 20
-    checkpoint_interval: int = 100
+    checkpoint_interval: int = 1000
     gradient_clip: float = 1.0
     num_workers: int = 0
 

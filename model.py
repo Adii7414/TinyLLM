@@ -1,4 +1,4 @@
-"""A small decoder-only GPT-style Transformer implemented directly in PyTorch."""
+"""A modern, compact decoder-only Transformer implemented directly in PyTorch."""
 
 import math
 from typing import Optional, Tuple
@@ -8,6 +8,47 @@ from torch import nn
 from torch.nn import functional as F
 
 from config import Config
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, dimension: int, eps: float = 1e-5) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(dimension))
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        variance = x.float().pow(2).mean(dim=-1, keepdim=True)
+        normalized = x * torch.rsqrt(variance + self.eps).to(dtype=x.dtype)
+        return normalized * self.weight
+
+
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    first, second = x.chunk(2, dim=-1)
+    return torch.cat((-second, first), dim=-1)
+
+
+class RotaryEmbedding(nn.Module):
+    def __init__(self, head_dim: int, context_length: int, theta: float) -> None:
+        super().__init__()
+        if head_dim % 2:
+            raise ValueError("Attention head dimension must be even for RoPE.")
+        inverse_frequency = 1.0 / (
+            theta ** (torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim)
+        )
+        positions = torch.arange(context_length, dtype=torch.float32)
+        angles = torch.outer(positions, inverse_frequency)
+        self.register_buffer("cos", angles.cos()[None, None, :, :], persistent=False)
+        self.register_buffer("sin", angles.sin()[None, None, :, :], persistent=False)
+
+    def forward(self, q: torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        sequence_length = q.size(-2)
+        cos = self.cos[:, :, :sequence_length, :]
+        sin = self.sin[:, :, :sequence_length, :]
+        # Interleave the two halves so the operation matches the standard
+        # rotary embedding definition while keeping the cache compact.
+        cos = torch.cat((cos, cos), dim=-1).to(dtype=q.dtype)
+        sin = torch.cat((sin, sin), dim=-1).to(dtype=q.dtype)
+        return q * cos + rotate_half(q) * sin, k * cos + rotate_half(k) * sin
 
 
 class CausalSelfAttention(nn.Module):
@@ -21,10 +62,8 @@ class CausalSelfAttention(nn.Module):
             config.embedding_dim, 3 * config.embedding_dim, bias=config.bias
         )
         self.output = nn.Linear(config.embedding_dim, config.embedding_dim, bias=config.bias)
-        self.attention_dropout = nn.Dropout(config.dropout)
-        self.residual_dropout = nn.Dropout(config.dropout)
-        mask = torch.tril(torch.ones(config.context_length, config.context_length))
-        self.register_buffer("causal_mask", mask.view(1, 1, config.context_length, config.context_length))
+        self.attention_dropout = config.dropout
+        self.rotary = RotaryEmbedding(self.head_dim, config.context_length, config.rope_theta)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, sequence_length, channels = x.shape
@@ -32,45 +71,43 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch_size, sequence_length, self.num_heads, self.head_dim).transpose(1, 2)
         k = k.view(batch_size, sequence_length, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(batch_size, sequence_length, self.num_heads, self.head_dim).transpose(1, 2)
-
-        attention_scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-        attention_scores = attention_scores.masked_fill(
-            self.causal_mask[:, :, :sequence_length, :sequence_length] == 0,
-            torch.finfo(attention_scores.dtype).min,
+        q, k = self.rotary(q, k)
+        attended = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.attention_dropout if self.training else 0.0,
+            is_causal=True,
         )
-        attention_weights = F.softmax(attention_scores, dim=-1)
-        attention_weights = self.attention_dropout(attention_weights)
-        attended = attention_weights @ v
         attended = attended.transpose(1, 2).contiguous().view(batch_size, sequence_length, channels)
-        return self.residual_dropout(self.output(attended))
+        return self.output(attended)
 
 
-class FeedForward(nn.Module):
+class SwiGLU(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(config.embedding_dim, config.feed_forward_dim, bias=config.bias),
-            nn.GELU(),
-            nn.Linear(config.feed_forward_dim, config.embedding_dim, bias=config.bias),
-            nn.Dropout(config.dropout),
+        self.gate_and_value = nn.Linear(
+            config.embedding_dim, 2 * config.feed_forward_dim, bias=config.bias
         )
+        self.output = nn.Linear(config.feed_forward_dim, config.embedding_dim, bias=config.bias)
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)
+        gate, value = self.gate_and_value(x).chunk(2, dim=-1)
+        return self.dropout(self.output(F.silu(gate) * value))
 
 
 class TransformerBlock(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()
-        self.layer_norm_1 = nn.LayerNorm(config.embedding_dim)
+        self.attention_norm = RMSNorm(config.embedding_dim, config.norm_eps)
         self.attention = CausalSelfAttention(config)
-        self.layer_norm_2 = nn.LayerNorm(config.embedding_dim)
-        self.feed_forward = FeedForward(config)
+        self.feed_forward_norm = RMSNorm(config.embedding_dim, config.norm_eps)
+        self.feed_forward = SwiGLU(config)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Pre-normalization keeps optimization stable in deeper Transformers.
-        x = x + self.attention(self.layer_norm_1(x))
-        x = x + self.feed_forward(self.layer_norm_2(x))
+        x = x + self.attention(self.attention_norm(x))
+        x = x + self.feed_forward(self.feed_forward_norm(x))
         return x
 
 
@@ -79,16 +116,14 @@ class GPTModel(nn.Module):
         super().__init__()
         self.config = config
         self.token_embedding = nn.Embedding(config.vocab_size, config.embedding_dim)
-        self.position_embedding = nn.Embedding(config.context_length, config.embedding_dim)
         self.blocks = nn.ModuleList(
             [TransformerBlock(config) for _ in range(config.num_layers)]
         )
-        self.final_layer_norm = nn.LayerNorm(config.embedding_dim)
+        self.final_norm = RMSNorm(config.embedding_dim, config.norm_eps)
         self.language_model_head = nn.Linear(
             config.embedding_dim, config.vocab_size, bias=False
         )
         self.apply(self._initialize_weights)
-        # Weight tying is common in language models and reduces redundant parameters.
         self.language_model_head.weight = self.token_embedding.weight
 
     @staticmethod
@@ -103,18 +138,16 @@ class GPTModel(nn.Module):
     def forward(
         self, token_ids: torch.Tensor, targets: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        batch_size, sequence_length = token_ids.shape
+        _, sequence_length = token_ids.shape
         if sequence_length > self.config.context_length:
             raise ValueError(
                 f"Sequence length {sequence_length} exceeds context length "
                 f"{self.config.context_length}"
             )
-        positions = torch.arange(sequence_length, device=token_ids.device)
-        x = self.token_embedding(token_ids) + self.position_embedding(positions)[None, :, :]
-        x = F.dropout(x, p=self.config.dropout, training=self.training)
+        x = self.token_embedding(token_ids)
         for block in self.blocks:
             x = block(x)
-        logits = self.language_model_head(self.final_layer_norm(x))
+        logits = self.language_model_head(self.final_norm(x))
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
@@ -142,7 +175,9 @@ def describe_model(model: GPTModel) -> str:
             f"Layers: {config.num_layers}",
             f"Heads: {config.num_heads}",
             f"Embedding: {config.embedding_dim}",
-            f"Feed-forward dimension: {config.feed_forward_dim}",
+            f"Feed-forward: {config.feed_forward_dim} (SwiGLU)",
+            f"Position encoding: RoPE (theta={config.rope_theta:g})",
+            f"Normalization: RMSNorm",
             f"Dropout: {config.dropout}",
         ]
     )

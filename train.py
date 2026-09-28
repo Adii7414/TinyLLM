@@ -1,10 +1,13 @@
-"""Train the byte-level GPT model from randomly initialized weights."""
+"""Train the local decoder-only language model from randomly initialized weights."""
 
 import argparse
 import glob
+import json
+import math
 import os
 import random
 import time
+from contextlib import nullcontext
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -27,21 +30,64 @@ def seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def load_data_metadata(path: str) -> Dict:
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Dataset metadata {path!r} does not exist. "
+            "Run prepare_dataset.py before training."
+        )
+    with open(path, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
 def make_config(args: argparse.Namespace) -> Config:
     config = Config.from_dict(DEFAULT_CONFIG.to_dict())
     for key in (
-        "dataset_path", "batch_size", "learning_rate", "training_steps",
-        "eval_interval", "eval_steps", "checkpoint_interval", "seed",
+        "dataset_path",
+        "dataset_meta_path",
+        "tokenizer_path",
+        "context_length",
+        "embedding_dim",
+        "num_layers",
+        "num_heads",
+        "feed_forward_dim",
+        "batch_size",
+        "gradient_accumulation_steps",
+        "learning_rate",
+        "min_learning_rate",
+        "warmup_steps",
+        "training_steps",
+        "eval_interval",
+        "eval_steps",
+        "checkpoint_interval",
+        "seed",
     ):
         value = getattr(args, key, None)
         if value is not None:
             setattr(config, key, value)
+    metadata = load_data_metadata(config.dataset_meta_path)
+    config.dataset_dtype = metadata.get("dtype", config.dataset_dtype)
+    config.vocab_size = int(metadata.get("vocab_size", config.vocab_size))
+    config.tokenizer_path = metadata.get("tokenizer_path", config.tokenizer_path)
     return config
 
 
 def latest_checkpoint(checkpoint_dir: str) -> Optional[str]:
     paths = sorted(glob.glob(os.path.join(checkpoint_dir, "checkpoint_*.pt")))
     return paths[-1] if paths else None
+
+
+def amp_dtype(device: torch.device) -> Optional[torch.dtype]:
+    if device.type != "cuda":
+        return None
+    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+
+def autocast_context(device: torch.device):
+    dtype = amp_dtype(device)
+    if dtype is None:
+        return nullcontext()
+    return torch.autocast(device_type="cuda", dtype=dtype)
 
 
 @torch.no_grad()
@@ -62,11 +108,17 @@ def estimate_validation_loss(
     return sum(losses) / len(losses)
 
 
-def autocast_context(device: torch.device):
-    if device.type == "cuda":
-        return torch.autocast(device_type="cuda", dtype=torch.float16)
-    # A disabled context keeps the training code identical on CPU and CUDA.
-    return torch.autocast(device_type="cpu", enabled=False)
+def learning_rate_at(step: int, config: Config) -> float:
+    if step <= config.warmup_steps:
+        return config.learning_rate * step / max(config.warmup_steps, 1)
+    progress = (step - config.warmup_steps) / max(
+        config.training_steps - config.warmup_steps, 1
+    )
+    progress = min(max(progress, 0.0), 1.0)
+    cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+    return config.min_learning_rate + (
+        config.learning_rate - config.min_learning_rate
+    ) * cosine
 
 
 def load_checkpoint(
@@ -75,7 +127,10 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
 ) -> Tuple[int, float, Dict]:
-    checkpoint = torch.load(path, map_location=device)
+    # Checkpoints are generated locally by this project and include optimizer
+    # and RNG state, so they intentionally use the full trusted serialization
+    # format introduced by PyTorch 2.6.
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
     return (
@@ -104,6 +159,9 @@ def save_checkpoint(
         "train_loss": train_loss,
         "val_loss": val_loss,
         "best_val_loss": best_val_loss,
+        "torch_rng_state": torch.get_rng_state(),
+        "numpy_rng_state": np.random.get_state(),
+        "python_rng_state": random.getstate(),
     }
     temporary_path = path + ".partial"
     torch.save(payload, temporary_path)
@@ -115,8 +173,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume", action="store_true", help="resume from the newest periodic checkpoint")
     parser.add_argument("--reset", action="store_true", help="ignore existing checkpoints and start at step 0")
     parser.add_argument("--dataset-path", dest="dataset_path")
+    parser.add_argument("--dataset-meta-path", dest="dataset_meta_path")
+    parser.add_argument("--tokenizer-path", dest="tokenizer_path")
+    parser.add_argument("--context-length", type=int)
+    parser.add_argument("--embedding-dim", type=int)
+    parser.add_argument("--num-layers", type=int)
+    parser.add_argument("--num-heads", type=int)
+    parser.add_argument("--feed-forward-dim", type=int)
     parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--gradient-accumulation-steps", type=int)
     parser.add_argument("--learning-rate", type=float)
+    parser.add_argument("--min-learning-rate", type=float)
+    parser.add_argument("--warmup-steps", type=int)
     parser.add_argument("--training-steps", type=int)
     parser.add_argument("--eval-interval", type=int)
     parser.add_argument("--eval-steps", type=int)
@@ -128,27 +196,49 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_arg_parser().parse_args()
     config = make_config(args)
-    if config.training_steps < 1:
-        raise ValueError("training_steps must be positive")
+    if config.training_steps < 1 or config.batch_size < 1:
+        raise ValueError("training_steps and batch_size must be positive")
+    if config.gradient_accumulation_steps < 1:
+        raise ValueError("gradient_accumulation_steps must be positive")
+
     seed_everything(config.seed)
+    torch.set_float32_matmul_precision("high")
     device = choose_device()
-    print(f"Device: {device}")
     if device.type == "cuda":
         print(f"GPU: {torch.cuda.get_device_name(device)}")
+    print(f"Device: {device}")
 
     train_data = TokenDataset(
-        config.dataset_path, config.context_length, config.validation_split, "train", config.seed
+        config.dataset_path,
+        config.context_length,
+        config.validation_split,
+        "train",
+        config.seed,
+        config.dataset_dtype,
     )
     val_data = TokenDataset(
-        config.dataset_path, config.context_length, config.validation_split, "val", config.seed
+        config.dataset_path,
+        config.context_length,
+        config.validation_split,
+        "val",
+        config.seed,
+        config.dataset_dtype,
     )
     model = GPTModel(config).to(device)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+        model.parameters(),
+        lr=config.learning_rate,
+        betas=(0.9, 0.95),
+        weight_decay=config.weight_decay,
+        fused=device.type == "cuda",
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
+    use_scaler = device.type == "cuda" and amp_dtype(device) == torch.float16
+    scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
     print(describe_model(model))
-    print(f"Train windows: {len(train_data):,} | Validation windows: {len(val_data):,}")
+    print(
+        f"Train windows: {len(train_data):,} | Validation windows: {len(val_data):,} | "
+        f"Effective batch: {config.batch_size * config.gradient_accumulation_steps}"
+    )
 
     start_step = 0
     best_val_loss = float("inf")
@@ -157,6 +247,10 @@ def main() -> None:
         start_step, best_val_loss, old_checkpoint = load_checkpoint(
             resume_path, model, optimizer, device
         )
+        if "torch_rng_state" in old_checkpoint:
+            torch.set_rng_state(old_checkpoint["torch_rng_state"])
+            np.random.set_state(old_checkpoint["numpy_rng_state"])
+            random.setstate(old_checkpoint["python_rng_state"])
         print(
             f"Resumed {resume_path} at step {start_step:,}; "
             f"best validation loss {best_val_loss:.4f}"
@@ -168,20 +262,35 @@ def main() -> None:
 
     model.train()
     run_start = time.perf_counter()
-    last_step_time = run_start
     latest_train_loss = float("nan")
     latest_val_loss: Optional[float] = None
+    optimizer.zero_grad(set_to_none=True)
     for step in range(start_step + 1, config.training_steps + 1):
-        x, y = train_data.batch(config.batch_size, device)
-        optimizer.zero_grad(set_to_none=True)
-        with autocast_context(device):
-            _, loss = model(x, y)
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
+        accumulated_loss = 0.0
+        for _ in range(config.gradient_accumulation_steps):
+            x, y = train_data.batch(config.batch_size, device)
+            with autocast_context(device):
+                _, loss = model(x, y)
+                scaled_loss = loss / config.gradient_accumulation_steps
+            accumulated_loss += float(loss.item())
+            if use_scaler:
+                scaler.scale(scaled_loss).backward()
+            else:
+                scaled_loss.backward()
+
+        if use_scaler:
+            scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.gradient_clip)
-        scaler.step(optimizer)
-        scaler.update()
-        latest_train_loss = float(loss.item())
+        current_lr = learning_rate_at(step, config)
+        for group in optimizer.param_groups:
+            group["lr"] = current_lr
+        if use_scaler:
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        latest_train_loss = accumulated_loss / config.gradient_accumulation_steps
 
         should_evaluate = step == 1 or step % config.eval_interval == 0 or step == config.training_steps
         if should_evaluate:
@@ -200,7 +309,9 @@ def main() -> None:
 
         if should_evaluate or step % max(1, config.eval_interval // 5) == 0:
             elapsed = max(time.perf_counter() - run_start, 1e-9)
-            tokens_processed = (step - start_step) * config.batch_size * config.context_length
+            tokens_processed = (
+                step - start_step
+            ) * config.batch_size * config.context_length * config.gradient_accumulation_steps
             tokens_per_second = tokens_processed / elapsed
             remaining = max(config.training_steps - step, 0)
             seconds_remaining = remaining * elapsed / max(step - start_step, 1)
@@ -211,7 +322,7 @@ def main() -> None:
             val_text = f" | val {latest_val_loss:.4f}" if latest_val_loss is not None else ""
             print(
                 f"step {step:>7,}/{config.training_steps:,} | train {latest_train_loss:.4f}"
-                f"{val_text} | {tokens_per_second:,.0f} tok/s"
+                f"{val_text} | lr {current_lr:.2e} | {tokens_per_second:,.0f} tok/s"
                 f" | ETA {seconds_remaining / 60:.1f} min{gpu_suffix}{best_marker}",
                 flush=True,
             )

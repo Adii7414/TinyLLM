@@ -1,8 +1,10 @@
 {
   "source_path": "training_data.txt",
   "output_path": "training_tokens.bin",
-  "token_count": 14312595,
-  "dtype": "uint8",
-  "vocab_size": 256,
-  "chunk_chars": 1048576
+  "token_count": 4800972,
+  "tokenizer_path": "tokenizer.json",
+  "dtype": "uint16",
+  "vocab_size": 4096,
+  "chunk_chars": 1048576,
+  "max_tokenizer_sample_bytes": 4000000
 }

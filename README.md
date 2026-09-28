@@ -1,20 +1,23 @@
-# Tiny Byte-Level GPT
+# Local Subword GPT
 
-This is a complete, educational, decoder-only Transformer language model
-written in Python and PyTorch. It starts with randomly initialized weights,
-trains locally on your own text, and does not call OpenAI, Anthropic, Gemini,
-Hugging Face pretrained models, or any inference API.
+This is a complete, local, decoder-only Transformer language model written in
+Python and PyTorch. It starts with randomly initialized weights, learns a
+compact byte-subword tokenizer from your text, trains locally, and does not
+call OpenAI, Anthropic, Gemini, Hugging Face pretrained models, or any
+inference API.
 
 The default model is intentionally small:
 
 | Setting | Default |
 | --- | ---: |
-| Vocabulary | 256 UTF-8 byte values |
-| Context length | 256 tokens |
-| Embedding dimension | 192 |
-| Transformer layers | 6 |
+| Vocabulary | 4,096 learned byte-subword tokens |
+| Context length | 1,024 tokens |
+| Embedding dimension | 384 |
+| Transformer layers | 8 |
 | Attention heads | 6 |
-| Feed-forward dimension | 768 |
+| Feed-forward dimension | 1,536 SwiGLU hidden units |
+| Position encoding | RoPE |
+| Normalization | RMSNorm |
 | Dropout | 0.05 |
 
 ## Install and run
@@ -34,17 +37,21 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Prepare the included sample text:
+Prepare the included sample text. This trains `tokenizer.json` and creates a
+compact `uint16` token stream:
 
 ```bash
 python prepare_dataset.py
 ```
 
 Put your own UTF-8 text in `training_data.txt`, or point the script at another
-file. The preprocessing script reads bounded chunks and writes a `uint8`
-binary stream; it does not load the complete source into RAM.
+file. The preprocessing script learns from a bounded sample, then reads the
+source in chunks and writes a compact `uint16` binary stream; it does not load
+the complete source into RAM.
 
-Train from scratch:
+Train from scratch. The default schedule includes gradient accumulation,
+warmup, cosine decay, mixed precision on CUDA, validation, and atomic
+checkpoints:
 
 ```bash
 python train.py
@@ -54,7 +61,8 @@ For a quick smoke test:
 
 ```bash
 python train.py --training-steps 5 --eval-interval 2 --eval-steps 1 \
-  --checkpoint-interval 5 --batch-size 2
+  --checkpoint-interval 5 --batch-size 2 \
+  --gradient-accumulation-steps 1 --context-length 256
 ```
 
 Resume from the newest periodic checkpoint:
@@ -74,7 +82,7 @@ Generate a continuation:
 
 ```bash
 python generate.py --prompt "The aircraft" --max_tokens 300 \
-  --temperature 0.8 --top-k 50
+  --temperature 0.8 --top-k 50 --top-p 0.92
 ```
 
 Omit `--prompt` to type one interactively. `--temperature 0` uses greedy
@@ -123,16 +131,33 @@ temporary overrides for the training settings.
 ## Project layout
 
 * `config.py` — one central configuration dataclass.
-* `tokenizer.py` — UTF-8 byte-to-ID and ID-to-UTF-8 conversion.
-* `prepare_dataset.py` — chunked text preprocessing to `training_tokens.bin`.
+* `tokenizer.py` — dependency-free learned byte-subword tokenizer with byte fallback.
+* `prepare_dataset.py` — tokenizer training and disk-backed token preprocessing.
 * `dataset.py` — NumPy `memmap` and random contiguous training batches.
-* `model.py` — the Transformer implementation; no pretrained model is loaded.
-* `train.py` — AdamW, cross-entropy, validation, AMP, progress, and checkpoints.
-* `generate.py` — temperature/top-k autoregressive generation.
-* `chat.py` — a tiny conversation wrapper with bounded history.
+* `model.py` — RoPE attention, RMSNorm, SwiGLU, and weight tying.
+* `train.py` — AdamW, warmup/cosine decay, accumulation, AMP, validation, and checkpoints.
+* `generate.py` — temperature/top-k/top-p/repetition-aware generation.
+* `chat.py` — a bounded-history local chat wrapper.
 * `benchmark.py` — actual forward/backward or inference throughput.
 * `training_data.txt` — a small runnable example corpus.
 * `checkpoints/` — periodic checkpoints and `best_model.pt`.
+
+## Making it genuinely capable
+
+Architecture improvements help, but data and training budget dominate quality.
+For a useful assistant rather than a text continuation demo:
+
+1. Use a large, clean, deduplicated corpus.
+2. Keep train and validation documents separate; do not randomly split copies
+   of the same document.
+3. Pretrain on raw text, then fine-tune on high-quality conversations.
+4. Format conversations with explicit system, user, assistant, and end-of-turn
+   markers, and mask the loss so instruction tuning focuses on assistant text.
+5. Evaluate against a fixed prompt set after each training change.
+
+The current repository includes a small sample corpus for reproducibility and
+smoke tests. It cannot produce a broadly knowledgeable assistant without a
+larger corpus and a longer run.
 
 ## How the model works
 

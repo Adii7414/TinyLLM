@@ -5,7 +5,7 @@ import argparse
 import torch
 
 from generate import checkpoint_path, generate_tokens, load_model
-from tokenizer import decode, encode
+from tokenizer import load_tokenizer
 
 
 def main() -> None:
@@ -15,13 +15,19 @@ def main() -> None:
     parser.add_argument("--max_tokens", "--max-tokens", type=int, default=160)
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top-k", type=int, default=50)
+    parser.add_argument("--top-p", type=float, default=0.92)
+    parser.add_argument("--repetition-penalty", type=float, default=1.08)
+    parser.add_argument("--history-turns", type=int, default=8)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     path = checkpoint_path(args.checkpoint)
     model = load_model(path, device)
-    print("Small local byte-level GPT chat.")
-    print("This is an educational model, not ChatGPT; its replies depend entirely on your data.")
+    tokenizer = load_tokenizer(model.config.tokenizer_path)
+    if args.history_turns < 1:
+        raise ValueError("history-turns must be positive")
+    print("Local subword GPT chat.")
+    print("Responses depend entirely on the data used for training and fine-tuning.")
     print("Type 'exit' or press Ctrl-D to leave.\n")
 
     history = []
@@ -33,19 +39,25 @@ def main() -> None:
             break
         if message.strip().lower() in {"exit", "quit"}:
             break
-        history.append(f"User: {message}\nAssistant:")
+        history.append(f"<|user|>\n{message}\n<|assistant|>\n")
         prompt = "\n".join(history)
-        prompt_ids = encode(prompt)
+        prompt_ids = tokenizer.encode(prompt)
         output_ids = generate_tokens(
-            model, prompt_ids, args.max_tokens, args.temperature, args.top_k
+            model,
+            prompt_ids,
+            args.max_tokens,
+            args.temperature,
+            args.top_k,
+            args.top_p,
+            args.repetition_penalty,
+            tokenizer.eos_token_id,
         )
-        # Slice token IDs, not decoded characters: one Unicode character can
-        # occupy multiple UTF-8 byte tokens.
-        generated = decode(output_ids[len(prompt_ids) :])
+        generated = tokenizer.decode(output_ids[len(prompt_ids) :])
         # Keep a compact transcript so old turns do not crowd out the newest one.
-        answer = generated.split("\nUser:", 1)[0].strip()
+        answer = generated.split("<|user|>", 1)[0].strip()
         print(f"Model: {answer}\n")
-        history.append(f" {answer}")
+        history.append(answer)
+        history = history[-2 * args.history_turns :]
         if args.message is not None:
             break
 

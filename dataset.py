@@ -21,6 +21,7 @@ class TokenDataset:
         validation_split: float = 0.1,
         mode: str = "train",
         seed: int = 1337,
+        dtype: str = "uint16",
     ) -> None:
         if not os.path.exists(path):
             raise FileNotFoundError(
@@ -30,7 +31,9 @@ class TokenDataset:
             raise ValueError("mode must be 'train' or 'val'")
         self.path = path
         self.context_length = context_length
-        self.tokens = np.memmap(path, dtype=np.uint8, mode="r")
+        if dtype not in {"uint8", "uint16", "int32"}:
+            raise ValueError("dtype must be one of: uint8, uint16, int32")
+        self.tokens = np.memmap(path, dtype=np.dtype(dtype), mode="r")
         self.total_tokens = int(self.tokens.shape[0])
         if self.total_tokens <= context_length + 1:
             raise ValueError(
