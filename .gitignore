@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pythonlibs/
+training_tokens.bin
+training_tokens.meta.json
+checkpoints/*.pt

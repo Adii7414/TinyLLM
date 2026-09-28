@@ -1,0 +1,37 @@
+"""Print architecture and parameter information without training."""
+
+import argparse
+import glob
+import os
+
+import torch
+
+from config import Config, DEFAULT_CONFIG
+from model import GPTModel, describe_model
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--checkpoint",
+        help="inspect a checkpoint's saved configuration; otherwise inspect defaults",
+    )
+    args = parser.parse_args()
+    device = torch.device("cpu")
+    if args.checkpoint:
+        checkpoint = torch.load(args.checkpoint, map_location=device)
+        config = Config.from_dict(checkpoint["config"])
+    else:
+        config = Config.from_dict(DEFAULT_CONFIG.to_dict())
+    model = GPTModel(config)
+    print(describe_model(model))
+    if args.checkpoint:
+        print(f"Checkpoint: {args.checkpoint}")
+        if "step" in checkpoint:
+            print(f"Training step: {checkpoint['step']:,}")
+    else:
+        print("Weights: randomly initialized (configuration inspection only)")
+
+
+if __name__ == "__main__":
+    main()

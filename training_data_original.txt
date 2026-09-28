@@ -1,0 +1,30 @@
+This small sample is included so the entire educational language-model pipeline
+can be tested immediately. A useful model needs much more text, and the model
+will learn patterns from the exact material you provide.
+
+Airplanes are machines that fly through the atmosphere. An aircraft generates
+lift with its wings, moves forward with thrust, and uses control surfaces to
+change direction. Pilots monitor speed, altitude, weather, fuel, navigation,
+and the health of the aircraft systems.
+
+The Airbus A321neo is a narrow-body commercial jet. The word neo means new
+engine option. Airlines use aircraft such as the A321neo to connect cities
+efficiently. A safe flight begins with careful planning, a preflight check,
+clear communication, and respect for operating limits.
+
+A language model reads a sequence of byte tokens and predicts what byte comes
+next. During training it compares its prediction with the actual next byte.
+With enough varied examples, the model can learn spelling, punctuation, facts,
+and the style of the training text. A tiny model is useful for learning how
+the mechanism works, but it does not have the broad knowledge of a large
+production system.
+
+Transformer attention lets each position look at earlier positions. A causal
+mask hides future positions, because a next-token predictor must not receive
+the answer before it makes a prediction. Repeated practice updates randomly
+initialized weights with gradients so that useful patterns become more likely.
+
+User: Tell me about airplanes
+Assistant: Airplanes use wings to create lift and engines to create thrust.
+User: What is a byte?
+Assistant: A byte is a group of eight bits and can represent 256 values.
