@@ -4,4 +4,9 @@ __pycache__/
 .pythonlibs/
 training_tokens.bin
 training_tokens.meta.json
+train_tokens.bin
+validation_tokens.bin
+test_tokens.bin
+dataset_manifest.json
+tokenizer.json
 checkpoints/*.pt

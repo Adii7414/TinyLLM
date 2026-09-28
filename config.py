@@ -7,12 +7,10 @@ from typing import Any, Dict
 @dataclass
 class Config:
     # Data
-    dataset_path: str = "training_tokens.bin"
+    dataset_manifest_path: str = "dataset_manifest.json"
     dataset_source: str = "training_data.txt"
-    dataset_meta_path: str = "training_tokens.meta.json"
     tokenizer_path: str = "tokenizer.json"
     dataset_dtype: str = "uint16"
-    validation_split: float = 0.10
     seed: int = 1337
 
     # Model

@@ -30,21 +30,32 @@ def seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def load_data_metadata(path: str) -> Dict:
+def load_dataset_manifest(path: str) -> Dict:
     if not os.path.exists(path):
         raise FileNotFoundError(
-            f"Dataset metadata {path!r} does not exist. "
+            f"Dataset manifest {path!r} does not exist. "
             "Run prepare_dataset.py before training."
         )
     with open(path, "r", encoding="utf-8") as file:
-        return json.load(file)
+        manifest = json.load(file)
+    if manifest.get("format") != "document-split-v2":
+        raise ValueError(
+            f"Dataset manifest {path!r} is a legacy token-offset dataset. "
+            "Run prepare_dataset.py to create train_tokens.bin, "
+            "validation_tokens.bin, and test_tokens.bin before training."
+        )
+    for split in ("train", "validation", "test"):
+        if split not in manifest.get("splits", {}):
+            raise ValueError(f"Dataset manifest is missing the {split!r} split.")
+    if manifest.get("tokenizer", {}).get("training_source") != "train_documents_only":
+        raise ValueError("Dataset tokenizer provenance is not train-only.")
+    return manifest
 
 
 def make_config(args: argparse.Namespace) -> Config:
     config = Config.from_dict(DEFAULT_CONFIG.to_dict())
     for key in (
-        "dataset_path",
-        "dataset_meta_path",
+        "dataset_manifest_path",
         "tokenizer_path",
         "context_length",
         "embedding_dim",
@@ -65,10 +76,19 @@ def make_config(args: argparse.Namespace) -> Config:
         value = getattr(args, key, None)
         if value is not None:
             setattr(config, key, value)
-    metadata = load_data_metadata(config.dataset_meta_path)
-    config.dataset_dtype = metadata.get("dtype", config.dataset_dtype)
-    config.vocab_size = int(metadata.get("vocab_size", config.vocab_size))
-    config.tokenizer_path = metadata.get("tokenizer_path", config.tokenizer_path)
+    manifest = load_dataset_manifest(config.dataset_manifest_path)
+    tokenizer_metadata = manifest["tokenizer"]
+    preprocessing_metadata = manifest["preprocessing"]
+    requested_tokenizer_path = getattr(args, "tokenizer_path", None)
+    manifest_tokenizer_path = tokenizer_metadata["path"]
+    if requested_tokenizer_path and requested_tokenizer_path != manifest_tokenizer_path:
+        raise ValueError(
+            "The requested tokenizer does not match the dataset manifest. "
+            "Regenerate the dataset or use its tokenizer."
+        )
+    config.dataset_dtype = preprocessing_metadata["dtype"]
+    config.vocab_size = int(tokenizer_metadata["vocab_size"])
+    config.tokenizer_path = manifest_tokenizer_path
     return config
 
 
@@ -126,11 +146,19 @@ def load_checkpoint(
     model: GPTModel,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    config: Config,
 ) -> Tuple[int, float, Dict]:
     # Checkpoints are generated locally by this project and include optimizer
     # and RNG state, so they intentionally use the full trusted serialization
     # format introduced by PyTorch 2.6.
     checkpoint = torch.load(path, map_location=device, weights_only=False)
+    checkpoint_config = checkpoint.get("config", {})
+    if checkpoint_config.get("dataset_manifest_path") != config.dataset_manifest_path:
+        raise ValueError(
+            f"Checkpoint {path!r} was created with the legacy or a different "
+            "dataset pipeline. Use --reset to train from the new document-split "
+            "dataset instead of silently mixing data contracts."
+        )
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
     return (
@@ -172,8 +200,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--resume", action="store_true", help="resume from the newest periodic checkpoint")
     parser.add_argument("--reset", action="store_true", help="ignore existing checkpoints and start at step 0")
-    parser.add_argument("--dataset-path", dest="dataset_path")
-    parser.add_argument("--dataset-meta-path", dest="dataset_meta_path")
+    parser.add_argument("--dataset-manifest-path", dest="dataset_manifest_path")
     parser.add_argument("--tokenizer-path", dest="tokenizer_path")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--embedding-dim", type=int)
@@ -196,6 +223,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_arg_parser().parse_args()
     config = make_config(args)
+    manifest = load_dataset_manifest(config.dataset_manifest_path)
     if config.training_steps < 1 or config.batch_size < 1:
         raise ValueError("training_steps and batch_size must be positive")
     if config.gradient_accumulation_steps < 1:
@@ -209,19 +237,21 @@ def main() -> None:
     print(f"Device: {device}")
 
     train_data = TokenDataset(
-        config.dataset_path,
+        manifest["splits"]["train"]["path"],
         config.context_length,
-        config.validation_split,
-        "train",
         config.seed,
         config.dataset_dtype,
     )
     val_data = TokenDataset(
-        config.dataset_path,
+        manifest["splits"]["validation"]["path"],
         config.context_length,
-        config.validation_split,
-        "val",
-        config.seed,
+        config.seed + 1,
+        config.dataset_dtype,
+    )
+    test_data = TokenDataset(
+        manifest["splits"]["test"]["path"],
+        config.context_length,
+        config.seed + 2,
         config.dataset_dtype,
     )
     model = GPTModel(config).to(device)
@@ -237,6 +267,7 @@ def main() -> None:
     print(describe_model(model))
     print(
         f"Train windows: {len(train_data):,} | Validation windows: {len(val_data):,} | "
+        f"Test windows: {len(test_data):,} | "
         f"Effective batch: {config.batch_size * config.gradient_accumulation_steps}"
     )
 
@@ -245,7 +276,7 @@ def main() -> None:
     resume_path = latest_checkpoint(config.checkpoint_dir) if args.resume and not args.reset else None
     if resume_path:
         start_step, best_val_loss, old_checkpoint = load_checkpoint(
-            resume_path, model, optimizer, device
+            resume_path, model, optimizer, device, config
         )
         if "torch_rng_state" in old_checkpoint:
             torch.set_rng_state(old_checkpoint["torch_rng_state"])
@@ -335,6 +366,11 @@ def main() -> None:
             )
             print(f"Saved checkpoint: {path}", flush=True)
 
+    test_loss = estimate_validation_loss(model, test_data, config, device)
+    print(
+        f"Final test loss: {test_loss:.4f} | "
+        f"test perplexity: {math.exp(min(test_loss, 20.0)):.2f}"
+    )
     print(f"Training complete. Best model: {config.best_checkpoint}")
 
 

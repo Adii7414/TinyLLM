@@ -37,17 +37,34 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Prepare the included sample text. This trains `tokenizer.json` and creates a
-compact `uint16` token stream:
+Prepare the included sample text. This first assigns complete blank-line-
+delimited documents to train/validation/test, trains `tokenizer.json` using
+training documents only, and then creates three compact `uint16` token files:
 
 ```bash
 python prepare_dataset.py
 ```
 
 Put your own UTF-8 text in `training_data.txt`, or point the script at another
-file. The preprocessing script learns from a bounded sample, then reads the
-source in chunks and writes a compact `uint16` binary stream; it does not load
-the complete source into RAM.
+file or directory. A file is interpreted as blank-line-delimited documents;
+each file in a directory is processed the same way. The preprocessing pass
+keeps only a bounded tokenizer sample and one document in memory at a time.
+Document assignment is deterministic from document bytes and `--split-seed`.
+EOS is written once per document, never once per I/O chunk.
+
+The generated artifacts are:
+
+```text
+train_tokens.bin
+validation_tokens.bin
+test_tokens.bin
+tokenizer.json
+dataset_manifest.json
+```
+
+The manifest records split counts, token counts, source and output hashes,
+tokenizer provenance, and preprocessing settings. `train.py` rejects the old
+single-file token-offset metadata instead of silently using it.
 
 Train from scratch. The default schedule includes gradient accumulation,
 warmup, cosine decay, mixed precision on CUDA, validation, and atomic
@@ -87,7 +104,7 @@ python generate.py --prompt "The aircraft" --max_tokens 300 \
 
 Omit `--prompt` to type one interactively. `--temperature 0` uses greedy
 decoding. Smaller temperatures are more conservative; larger values are more
-random. `top-k` restricts sampling to the k most likely next bytes.
+random. `top-k` restricts sampling to the k most likely next tokens.
 
 Start the short-history chat loop:
 
@@ -124,7 +141,7 @@ python train.py --batch-size 16 --learning-rate 0.0003 \
 ```
 
 All defaults live in `config.py`. Edit that file to change model size,
-context length, dropout, layers, heads, embedding dimension, dataset paths,
+context length, dropout, layers, heads, embedding dimension, dataset manifest,
 and training defaults in one place. Command-line values are convenient
 temporary overrides for the training settings.
 
@@ -132,14 +149,16 @@ temporary overrides for the training settings.
 
 * `config.py` — one central configuration dataclass.
 * `tokenizer.py` — dependency-free learned byte-subword tokenizer with byte fallback.
-* `prepare_dataset.py` — tokenizer training and disk-backed token preprocessing.
-* `dataset.py` — NumPy `memmap` and random contiguous training batches.
+* `prepare_dataset.py` — deterministic document splitting, tokenizer training, and token preprocessing.
+* `dataset.py` — NumPy `memmap` batches for one pre-split token file.
 * `model.py` — RoPE attention, RMSNorm, SwiGLU, and weight tying.
 * `train.py` — AdamW, warmup/cosine decay, accumulation, AMP, validation, and checkpoints.
 * `generate.py` — temperature/top-k/top-p/repetition-aware generation.
 * `chat.py` — a bounded-history local chat wrapper.
 * `benchmark.py` — actual forward/backward or inference throughput.
-* `training_data.txt` — a small runnable example corpus.
+* `training_data.txt` — the active sample corpus.
+* `train_tokens.bin`, `validation_tokens.bin`, `test_tokens.bin` — separate generated partitions.
+* `dataset_manifest.json` — split, tokenizer, preprocessing, and checksum metadata.
 * `checkpoints/` — periodic checkpoints and `best_model.pt`.
 
 ## Making it genuinely capable
