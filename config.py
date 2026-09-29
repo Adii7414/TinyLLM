@@ -1,6 +1,6 @@
 """Central configuration for the local subword GPT training project."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict
 
 
@@ -11,6 +11,7 @@ class Config:
     dataset_source: str = "training_data.txt"
     tokenizer_path: str = "tokenizer.json"
     dataset_dtype: str = "uint16"
+    dataset_identity: Dict[str, Any] = field(default_factory=dict)
     seed: int = 1337
 
     # Model
@@ -30,12 +31,16 @@ class Config:
     tokenizer_sha256: str = ""
     eos_token_id: int = 0
     pad_token_id: int = 0
+    amp_dtype: str = "unresolved"
 
     # Training
     batch_size: int = 8
     gradient_accumulation_steps: int = 4
     learning_rate: float = 3e-4
     min_learning_rate: float = 3e-5
+    optimizer_name: str = "AdamW"
+    optimizer_beta1: float = 0.9
+    optimizer_beta2: float = 0.95
     warmup_steps: int = 500
     weight_decay: float = 0.1
     training_steps: int = 20000
