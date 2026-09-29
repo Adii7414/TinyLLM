@@ -1,7 +1,7 @@
 """Central configuration for the local subword GPT training project."""
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -46,17 +46,19 @@ class Config:
     warmup_steps: int = 0
     warmup_fraction: float = 0.1
     weight_decay: float = 0.1
-    # Resolved from target_epochs and the TRAIN token count at startup. A
-    # positive value is kept for explicit --training-steps overrides and
-    # checkpoint compatibility.
-    target_epochs: float = 5.0
+    # Exactly one budget mode is resolved at startup. target_epochs is None
+    # when the explicit optimizer-step budget is selected.
+    target_epochs: Optional[float] = 5.0
     training_steps: int = 0
     budget_source: str = "unresolved"
     unique_training_tokens: int = 0
+    validation_tokens: int = 0
+    test_tokens: int = 0
     tokens_per_optimizer_update: int = 0
     updates_per_epoch: int = 0
     total_tokens_processed: int = 0
     effective_epochs: float = 0.0
+    expected_corpus_passes: float = 0.0
     eval_interval: int = 250
     eval_steps: int = 20
     checkpoint_interval: int = 1000

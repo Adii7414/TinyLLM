@@ -86,31 +86,33 @@ count, not a fixed step count:
 python train.py
 ```
 
-For the current included corpus and defaults, the schedule is approximately:
+For the current included corpus and the default five-epoch budget, the schedule is approximately:
 
 ```text
-unique TRAIN tokens:          4,276,031
-tokens per optimizer update:     32,768
-updates per epoch:                    131
-initial budget:                        5 token-equivalent epochs
-optimizer updates:                    655
+training tokens:              4,276,031
+validation tokens:              245,352
+test tokens:                    256,235
+effective tokens per update:     32,768
+optimizer updates per epoch:        131
+requested target epochs:              5
+total optimizer steps:               655
 total tokens processed:        21,463,040
-effective epochs:                   5.019
+expected corpus passes:             5.019
 ```
 
 `train.py` prints the same values from the manifest at startup. It tracks
 token-equivalent epoch progress because batches are sampled randomly from the
-TRAIN token file. Use `--target-epochs` to choose a different data-sized
-budget. `--training-steps` remains available only as an explicit override and
-will warn when it repeatedly cycles through TRAIN excessively. Progress lines
-log `step`, `epoch`, `tokens processed`, `train loss`, `validation loss`,
-`train perplexity`, `validation perplexity`, and `learning rate`. Validation
-loss does not automatically extend the run.
+TRAIN token file. Use `--epochs N` for an epoch-derived budget or `--steps N`
+for an explicit optimizer-step budget. Supplying both is rejected. Explicit
+step budgets still warn when they repeatedly cycle through TRAIN excessively.
+Progress lines log `step/total_steps`, `epoch`, `tokens_processed`, `train_loss`,
+`validation_loss`, train and validation `perplexity`, and `learning_rate`.
+Validation loss does not automatically extend the run.
 
 For a quick smoke test:
 
 ```bash
-python train.py --training-steps 5 --eval-interval 2 --eval-steps 1 \
+python train.py --steps 5 --eval-interval 2 --eval-steps 1 \
   --checkpoint-interval 5 --batch-size 2 \
   --gradient-accumulation-steps 1 --context-length 256
 ```
@@ -201,7 +203,7 @@ Change the most useful training settings without editing code:
 
 ```bash
 python train.py --batch-size 16 --learning-rate 0.0003 \
-  --target-epochs 5 --checkpoint-interval 1000
+  --epochs 5 --checkpoint-interval 1000
 ```
 
 All defaults live in `config.py`. Edit that file to change model size,

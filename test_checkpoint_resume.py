@@ -51,23 +51,42 @@ class CheckpointResumeTests(unittest.TestCase):
             training_steps=0,
             warmup_steps=0,
         )
-        schedule = resolve_training_budget(config, 4_276_031)
+        schedule = resolve_training_budget(config, 4_276_031, 245_352, 256_235)
+        self.assertEqual(schedule["training_tokens"], 4_276_031)
+        self.assertEqual(schedule["validation_tokens"], 245_352)
+        self.assertEqual(schedule["test_tokens"], 256_235)
         self.assertEqual(schedule["unique_training_tokens"], 4_276_031)
         self.assertEqual(schedule["tokens_per_optimizer_update"], 32_768)
         self.assertEqual(schedule["updates_per_epoch"], 131)
         self.assertEqual(schedule["training_steps"], 655)
         self.assertEqual(schedule["total_tokens_processed"], 21_463_040)
         self.assertAlmostEqual(schedule["effective_epochs"], 5.019, places=3)
+        self.assertAlmostEqual(schedule["expected_corpus_passes"], 5.019, places=3)
+        self.assertEqual(schedule["requested_target_epochs"], 5.0)
+        self.assertEqual(schedule["total_optimizer_steps"], 655)
         self.assertEqual(config.warmup_steps, 66)
         self.assertIsNone(schedule["warning"])
+
+    def test_epoch_and_step_budgets_cannot_be_combined(self) -> None:
+        config = Config(
+            batch_size=1,
+            gradient_accumulation_steps=1,
+            context_length=8,
+            target_epochs=2.0,
+            training_steps=10,
+        )
+        with self.assertRaisesRegex(ValueError, "either epochs or steps"):
+            resolve_training_budget(config, 100)
 
     def test_schedule_warns_about_excessive_corpus_recycling(self) -> None:
         config = Config(
             batch_size=8,
             gradient_accumulation_steps=4,
             context_length=1024,
-            target_epochs=5.0,
             training_steps=20_000,
+            # An explicit step budget must not also carry an epoch budget.
+            # This is the direct Config equivalent of --steps 20_000.
+            target_epochs=None,
             warmup_steps=500,
         )
         schedule = training_schedule(config, 4_276_031)
@@ -96,6 +115,7 @@ class CheckpointResumeTests(unittest.TestCase):
             learning_rate=1e-3,
             min_learning_rate=1e-4,
             warmup_steps=1,
+            target_epochs=None,
             training_steps=training_steps,
             eval_interval=1,
             eval_steps=1,
@@ -129,7 +149,7 @@ class CheckpointResumeTests(unittest.TestCase):
         optimizer.zero_grad(set_to_none=True)
         return float(loss.detach()), learning_rate
 
-    def test_resume_restores_complete_state_and_allows_extension(self) -> None:
+    def test_resume_restores_complete_state_and_budget(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = self.make_config(directory, training_steps=2)
             seed_everything(1234)
@@ -156,7 +176,7 @@ class CheckpointResumeTests(unittest.TestCase):
             self.assertTrue(Path(checkpoint_path).exists())
             self.assertFalse(Path(checkpoint_path + ".partial").exists())
             saved = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-            self.assertEqual(saved["checkpoint_format"], "training-checkpoint-v3")
+            self.assertEqual(saved["checkpoint_format"], "training-checkpoint-v4")
             for key in (
                 "model_state",
                 "optimizer_state",
@@ -184,10 +204,10 @@ class CheckpointResumeTests(unittest.TestCase):
             expected_global_python = random.getstate()
             expected_batches = [dataset.batch(2, torch.device("cpu")) for dataset in datasets]
 
-            extended_config = replace(config, training_steps=4)
+            resumed_config = replace(config)
             seed_everything(9999)
             resumed_model, resumed_optimizer, resumed_scaler, resumed_scheduler, resumed_datasets = (
-                self.make_runtime(directory, extended_config)
+                self.make_runtime(directory, resumed_config)
             )
             step, best_loss, _ = load_checkpoint(
                 checkpoint_path,
@@ -197,7 +217,7 @@ class CheckpointResumeTests(unittest.TestCase):
                 resumed_scheduler,
                 *resumed_datasets,
                 torch.device("cpu"),
-                extended_config,
+                resumed_config,
             )
 
             self.assertEqual(step, 2)
@@ -217,11 +237,41 @@ class CheckpointResumeTests(unittest.TestCase):
                 self.assertTrue(torch.equal(expected[0], resumed[0]))
                 self.assertTrue(torch.equal(expected[1], resumed[1]))
 
-            _, learning_rate = self.train_one_step(
-                resumed_model, resumed_optimizer, resumed_scheduler, resumed_datasets[0], 3
+    def test_resume_rejects_a_changed_training_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.make_config(directory, training_steps=2)
+            seed_everything(1234)
+            model, optimizer, scaler, scheduler, datasets = self.make_runtime(
+                directory, config
             )
-            self.assertEqual(resumed_scheduler.step_num, 3)
-            self.assertEqual(learning_rate, config.min_learning_rate)
+            self.train_one_step(model, optimizer, scheduler, datasets[0], 1)
+            checkpoint_path = str(Path(directory) / "checkpoint.pt")
+            save_checkpoint(
+                checkpoint_path,
+                model,
+                optimizer,
+                scaler,
+                scheduler,
+                *datasets,
+                config,
+                1,
+                1.0,
+                1.0,
+                1.0,
+            )
+            changed = replace(config, training_steps=3)
+            runtime = self.make_runtime(directory, changed)
+            with self.assertRaisesRegex(ValueError, "training_steps"):
+                load_checkpoint(
+                    checkpoint_path,
+                    runtime[0],
+                    runtime[1],
+                    runtime[2],
+                    runtime[3],
+                    *runtime[4],
+                    torch.device("cpu"),
+                    changed,
+                )
 
     def test_incompatible_resume_configuration_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
