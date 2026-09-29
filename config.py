@@ -43,9 +43,20 @@ class Config:
     optimizer_name: str = "AdamW"
     optimizer_beta1: float = 0.9
     optimizer_beta2: float = 0.95
-    warmup_steps: int = 500
+    warmup_steps: int = 0
+    warmup_fraction: float = 0.1
     weight_decay: float = 0.1
-    training_steps: int = 20000
+    # Resolved from target_epochs and the TRAIN token count at startup. A
+    # positive value is kept for explicit --training-steps overrides and
+    # checkpoint compatibility.
+    target_epochs: float = 5.0
+    training_steps: int = 0
+    budget_source: str = "unresolved"
+    unique_training_tokens: int = 0
+    tokens_per_optimizer_update: int = 0
+    updates_per_epoch: int = 0
+    total_tokens_processed: int = 0
+    effective_epochs: float = 0.0
     eval_interval: int = 250
     eval_steps: int = 20
     checkpoint_interval: int = 1000

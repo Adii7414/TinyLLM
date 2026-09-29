@@ -17,8 +17,10 @@ from train import (
     LearningRateScheduler,
     amp_dtype_name,
     load_checkpoint,
+    resolve_training_budget,
     save_checkpoint,
     seed_everything,
+    training_schedule,
 )
 
 
@@ -40,6 +42,37 @@ def assert_nested_equal(test_case: unittest.TestCase, left: Any, right: Any) -> 
 
 
 class CheckpointResumeTests(unittest.TestCase):
+    def test_training_budget_is_based_on_train_tokens(self) -> None:
+        config = Config(
+            batch_size=8,
+            gradient_accumulation_steps=4,
+            context_length=1024,
+            target_epochs=5.0,
+            training_steps=0,
+            warmup_steps=0,
+        )
+        schedule = resolve_training_budget(config, 4_276_031)
+        self.assertEqual(schedule["unique_training_tokens"], 4_276_031)
+        self.assertEqual(schedule["tokens_per_optimizer_update"], 32_768)
+        self.assertEqual(schedule["updates_per_epoch"], 131)
+        self.assertEqual(schedule["training_steps"], 655)
+        self.assertEqual(schedule["total_tokens_processed"], 21_463_040)
+        self.assertAlmostEqual(schedule["effective_epochs"], 5.019, places=3)
+        self.assertEqual(config.warmup_steps, 66)
+        self.assertIsNone(schedule["warning"])
+
+    def test_schedule_warns_about_excessive_corpus_recycling(self) -> None:
+        config = Config(
+            batch_size=8,
+            gradient_accumulation_steps=4,
+            context_length=1024,
+            target_epochs=5.0,
+            training_steps=20_000,
+            warmup_steps=500,
+        )
+        schedule = training_schedule(config, 4_276_031)
+        self.assertIsNotNone(schedule["warning"])
+
     def make_config(self, directory: str, training_steps: int) -> Config:
         return Config(
             dataset_manifest_path=str(Path(directory) / "dataset_manifest.json"),

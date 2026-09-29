@@ -70,11 +70,33 @@ silently using it.
 
 Train from scratch. The default schedule includes gradient accumulation,
 warmup, cosine decay, mixed precision on CUDA, validation, and atomic
-checkpoints:
+checkpoints. The default budget is calculated from the current TRAIN token
+count, not a fixed step count:
 
 ```bash
 python train.py
 ```
+
+For the current included corpus and defaults, the schedule is approximately:
+
+```text
+unique TRAIN tokens:          4,276,031
+tokens per optimizer update:     32,768
+updates per epoch:                    131
+initial budget:                        5 token-equivalent epochs
+optimizer updates:                    655
+total tokens processed:        21,463,040
+effective epochs:                   5.019
+```
+
+`train.py` prints the same values from the manifest at startup. It tracks
+token-equivalent epoch progress because batches are sampled randomly from the
+TRAIN token file. Use `--target-epochs` to choose a different data-sized
+budget. `--training-steps` remains available only as an explicit override and
+will warn when it repeatedly cycles through TRAIN excessively. Progress lines
+log `step`, `epoch`, `tokens processed`, `train loss`, `validation loss`,
+`train perplexity`, `validation perplexity`, and `learning rate`. Validation
+loss does not automatically extend the run.
 
 For a quick smoke test:
 
@@ -170,7 +192,7 @@ Change the most useful training settings without editing code:
 
 ```bash
 python train.py --batch-size 16 --learning-rate 0.0003 \
-  --training-steps 10000 --checkpoint-interval 1000
+  --target-epochs 5 --checkpoint-interval 1000
 ```
 
 All defaults live in `config.py`. Edit that file to change model size,

@@ -22,6 +22,7 @@ from tokenizer import load_tokenizer, tokenizer_fingerprint
 
 CHECKPOINT_FORMAT = "training-checkpoint-v3"
 SAFE_RESUME_OVERRIDES = {"training_steps"}
+EXCESSIVE_EPOCHS_THRESHOLD = 10.0
 
 
 def choose_device() -> torch.device:
@@ -82,6 +83,90 @@ def dataset_identity(path: str, manifest: Dict) -> Dict[str, Any]:
     }
 
 
+def training_schedule(config: Config, train_token_count: int) -> Dict[str, Any]:
+    """Calculate token-equivalent progress for the resolved training run.
+
+    Batches are sampled randomly from the TRAIN partition, so an epoch is
+    token-equivalent progress rather than a guarantee that every document is
+    visited exactly once.
+    """
+    if train_token_count < 1:
+        raise ValueError("The TRAIN partition must contain at least one token.")
+    if config.batch_size < 1 or config.gradient_accumulation_steps < 1:
+        raise ValueError("batch_size and gradient_accumulation_steps must be positive.")
+    if config.context_length < 1:
+        raise ValueError("context_length must be positive.")
+    if config.training_steps < 1:
+        raise ValueError("training_steps must be resolved before calculating a schedule.")
+    tokens_per_update = (
+        config.batch_size
+        * config.gradient_accumulation_steps
+        * config.context_length
+    )
+    updates_per_epoch = math.ceil(train_token_count / tokens_per_update)
+    total_tokens_processed = config.training_steps * tokens_per_update
+    effective_epochs = total_tokens_processed / train_token_count
+    warning = None
+    if effective_epochs > EXCESSIVE_EPOCHS_THRESHOLD:
+        warning = (
+            f"This run processes {effective_epochs:.2f} effective epochs over TRAIN, "
+            f"above the {EXCESSIVE_EPOCHS_THRESHOLD:.0f}-epoch warning threshold. "
+            "Repeated corpus cycling can encourage memorization; prefer a shorter "
+            "token budget unless a separate experiment justifies it."
+        )
+    return {
+        "unique_training_tokens": int(train_token_count),
+        "tokens_per_optimizer_update": int(tokens_per_update),
+        "updates_per_epoch": int(updates_per_epoch),
+        "training_steps": int(config.training_steps),
+        "total_tokens_processed": int(total_tokens_processed),
+        "effective_epochs": effective_epochs,
+        "warning": warning,
+    }
+
+
+def resolve_training_budget(config: Config, train_token_count: int) -> Dict[str, Any]:
+    """Resolve the default epoch budget and warmup from the TRAIN size."""
+    if config.target_epochs <= 0:
+        raise ValueError("target_epochs must be positive.")
+    if train_token_count < 1:
+        raise ValueError("The TRAIN partition must contain at least one token.")
+    tokens_per_update = (
+        config.batch_size
+        * config.gradient_accumulation_steps
+        * config.context_length
+    )
+    if tokens_per_update < 1:
+        raise ValueError("The optimizer update must process at least one token.")
+    updates_per_epoch = math.ceil(train_token_count / tokens_per_update)
+    if config.training_steps < 1:
+        config.training_steps = max(1, math.ceil(config.target_epochs * updates_per_epoch))
+        config.budget_source = "target_epochs"
+    else:
+        config.budget_source = "explicit_training_steps"
+    if config.warmup_steps < 1:
+        config.warmup_steps = max(
+            1,
+            min(
+                config.training_steps - 1,
+                round(config.training_steps * config.warmup_fraction),
+            ),
+        )
+    schedule = training_schedule(config, train_token_count)
+    config.unique_training_tokens = schedule["unique_training_tokens"]
+    config.tokens_per_optimizer_update = schedule["tokens_per_optimizer_update"]
+    config.updates_per_epoch = schedule["updates_per_epoch"]
+    config.total_tokens_processed = schedule["total_tokens_processed"]
+    config.effective_epochs = schedule["effective_epochs"]
+    return schedule
+
+
+def perplexity_from_loss(loss: Optional[float]) -> Optional[float]:
+    if loss is None:
+        return None
+    return math.exp(loss) if loss < 700 else float("inf")
+
+
 def make_config(args: argparse.Namespace) -> Config:
     config = Config.from_dict(DEFAULT_CONFIG.to_dict())
     for key in (
@@ -98,6 +183,8 @@ def make_config(args: argparse.Namespace) -> Config:
         "learning_rate",
         "min_learning_rate",
         "warmup_steps",
+        "warmup_fraction",
+        "target_epochs",
         "training_steps",
         "eval_interval",
         "eval_steps",
@@ -134,6 +221,10 @@ def make_config(args: argparse.Namespace) -> Config:
     config.tokenizer_sha256 = actual_tokenizer_hash
     config.eos_token_id = tokenizer.eos_token_id
     config.pad_token_id = tokenizer.pad_token_id
+    resolve_training_budget(
+        config,
+        int(manifest["splits"]["train"]["token_count"]),
+    )
     return config
 
 
@@ -415,7 +506,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset-manifest-path", dest="dataset_manifest_path")
     parser.add_argument("--tokenizer-path", dest="tokenizer_path")
     parser.add_argument("--validation-evaluation-path")
-    parser.add_argument("--test-evaluation-path")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--embedding-dim", type=int)
     parser.add_argument("--num-layers", type=int)
@@ -426,7 +516,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float)
     parser.add_argument("--min-learning-rate", type=float)
     parser.add_argument("--warmup-steps", type=int)
-    parser.add_argument("--training-steps", type=int)
+    parser.add_argument(
+        "--warmup-fraction",
+        type=float,
+        help="warmup fraction used when --warmup-steps is omitted",
+    )
+    parser.add_argument(
+        "--target-epochs",
+        type=float,
+        help="token-equivalent TRAIN epochs for the initial pretraining budget",
+    )
+    parser.add_argument(
+        "--training-steps",
+        type=int,
+        help="explicit optimizer-update override; prefer --target-epochs",
+    )
     parser.add_argument("--eval-interval", type=int)
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--checkpoint-interval", type=int)
@@ -469,6 +573,13 @@ def main() -> None:
         config.seed + 1,
         config.dataset_dtype,
     )
+    manifest_train_tokens = int(manifest["splits"]["train"]["token_count"])
+    if train_data.total_tokens != manifest_train_tokens:
+        raise ValueError(
+            "TRAIN token count does not match the dataset manifest; "
+            "run prepare_dataset.py again."
+        )
+    schedule = training_schedule(config, train_data.total_tokens)
     model = GPTModel(config).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -485,6 +596,19 @@ def main() -> None:
         f"Train windows: {len(train_data):,} | Validation windows: {len(val_data):,} | "
         f"Effective batch: {config.batch_size * config.gradient_accumulation_steps}"
     )
+    print("Training schedule:")
+    print(f"  unique TRAIN tokens: {schedule['unique_training_tokens']:,}")
+    print(
+        "  tokens per optimizer update: "
+        f"{schedule['tokens_per_optimizer_update']:,}"
+    )
+    print(f"  updates per epoch: {schedule['updates_per_epoch']:,}")
+    print(f"  optimizer updates: {schedule['training_steps']:,}")
+    print(f"  total tokens processed: {schedule['total_tokens_processed']:,}")
+    print(f"  effective epochs: {schedule['effective_epochs']:.3f}")
+    print(f"  budget source: {config.budget_source}")
+    if schedule["warning"]:
+        print(f"WARNING: {schedule['warning']}", flush=True)
 
     start_step = 0
     best_val_loss = float("inf")
@@ -569,20 +693,36 @@ def main() -> None:
 
         if should_evaluate or step % max(1, config.eval_interval // 5) == 0:
             elapsed = max(time.perf_counter() - run_start, 1e-9)
-            tokens_processed = (
+            tokens_processed = step * schedule["tokens_per_optimizer_update"]
+            run_tokens_processed = (
                 step - start_step
-            ) * config.batch_size * config.context_length * config.gradient_accumulation_steps
-            tokens_per_second = tokens_processed / elapsed
+            ) * schedule["tokens_per_optimizer_update"]
+            epoch = tokens_processed / schedule["unique_training_tokens"]
+            tokens_per_second = run_tokens_processed / elapsed
             remaining = max(config.training_steps - step, 0)
             seconds_remaining = remaining * elapsed / max(step - start_step, 1)
             gpu_suffix = ""
             if device.type == "cuda":
                 allocated = torch.cuda.memory_allocated(device) / (1024**3)
                 gpu_suffix = f" | GPU memory {allocated:.2f} GB"
-            val_text = f" | val {latest_val_loss:.4f}" if latest_val_loss is not None else ""
+            train_perplexity = perplexity_from_loss(latest_train_loss)
+            val_perplexity = perplexity_from_loss(latest_val_loss)
+            val_text = (
+                f"{latest_val_loss:.4f}" if latest_val_loss is not None else "—"
+            )
+            val_perplexity_text = (
+                f"{val_perplexity:.3f}" if val_perplexity is not None else "—"
+            )
             print(
-                f"step {step:>7,}/{config.training_steps:,} | train {latest_train_loss:.4f}"
-                f"{val_text} | lr {current_lr:.2e} | {tokens_per_second:,.0f} tok/s"
+                f"step {step:>7,}/{config.training_steps:,}"
+                f" | epoch {epoch:.3f}"
+                f" | tokens {tokens_processed:,}"
+                f" | train_loss {latest_train_loss:.4f}"
+                f" | val_loss {val_text}"
+                f" | train_ppl {train_perplexity:.3f}"
+                f" | val_ppl {val_perplexity_text}"
+                f" | lr {current_lr:.2e}"
+                f" | {tokens_per_second:,.0f} tok/s"
                 f" | ETA {seconds_remaining / 60:.1f} min{gpu_suffix}{best_marker}",
                 flush=True,
             )
@@ -606,7 +746,8 @@ def main() -> None:
             print(f"Saved checkpoint: {path}", flush=True)
 
     print(
-        "Training complete. The held-out test set was not loaded or evaluated. "
+        f"Training complete at {schedule['effective_epochs']:.3f} effective epochs. "
+        "The held-out test set was not loaded or evaluated. "
         f"Run evaluation.py --mode final-test --checkpoint {config.best_checkpoint!r} "
         "after all training decisions are finished."
     )
