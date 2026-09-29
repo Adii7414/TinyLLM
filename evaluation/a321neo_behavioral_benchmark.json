@@ -5,6 +5,9 @@
     "test_set_is_not_used": true,
     "manual_curation": true,
     "no_single_composite_score": true,
+    "not_used_for_training": true,
+    "not_used_for_instruction_finetuning": true,
+    "unseen_from_training_and_instruction": true,
     "safety_scope": "Conceptual study questions only. Exact aircraft procedures, limitations, and operational decisions require current approved aircraft and operator documentation."
   },
   "questions": [
@@ -15,10 +18,11 @@
       "topic_terms": ["neo", "a321neo"],
       "expected_key_facts": [
         {"fact": "NEO means New Engine Option.", "aliases": ["new engine option"]},
-        {"fact": "A321neo is an A320 Family aircraft variant.", "aliases": ["a320 family", "a320-family", "a320 family aircraft"]}
+        {"fact": "A321neo is an A320 Family aircraft variant.", "aliases": ["a320 family", "a320-family"]}
       ],
-      "question_requirements": ["define NEO", "identify the aircraft family"],
-      "forbidden_claims": ["neo means new electric operation"]
+      "acceptable_concepts": ["It is a narrow-body A320 Family variant with new-engine options.", "NEO describes the engine-option generation, not a separate aircraft family."],
+      "important_incorrect_concepts": ["NEO means new electric operation.", "NEO identifies a wide-body aircraft."],
+      "question_requirements": ["define NEO", "identify the aircraft family"]
     },
     {
       "id": "factual-002",
@@ -29,8 +33,9 @@
         {"fact": "The A321neo is a narrow-body commercial jet.", "aliases": ["narrow-body", "narrow body"]},
         {"fact": "It has two engines.", "aliases": ["twin-engine", "twin engine", "two engines"]}
       ],
-      "question_requirements": ["state the broad aircraft type"],
-      "forbidden_claims": ["it is a four-engine wide-body"]
+      "acceptable_concepts": ["A twin-engine, single-aisle commercial transport.", "A member of the A320neo family."],
+      "important_incorrect_concepts": ["It is a four-engine wide-body.", "It is a single-engine aircraft."],
+      "question_requirements": ["state the broad aircraft type"]
     },
     {
       "id": "why-001",
@@ -38,13 +43,14 @@
       "question": "Why should a pilot separate the selected state, active mode, and actual aircraft response?",
       "topic_terms": ["selected", "active", "aircraft response", "fma"],
       "expected_key_facts": [
-        {"fact": "The selected state is what the crew requests or enters.", "aliases": ["crew selects", "selected target", "pilot selects", "what the crew requests"]},
-        {"fact": "The active mode is what the aircraft is currently using.", "aliases": ["active mode", "mode currently", "currently active"]},
-        {"fact": "The aircraft response is what the aircraft actually does.", "aliases": ["aircraft response", "actual response", "what the aircraft does"]},
-        {"fact": "Separating them helps diagnose selection, mode, data, or system problems.", "aliases": ["diagnose", "selection", "mode", "data", "system problem"]}
+        {"fact": "The selected state is what the crew requests or enters.", "aliases": ["crew selects", "selected target", "pilot selects"]},
+        {"fact": "The active mode is what the aircraft is currently using.", "aliases": ["active mode", "currently active"]},
+        {"fact": "The aircraft response is what the aircraft actually does.", "aliases": ["aircraft response", "actual response"]},
+        {"fact": "Separating them helps diagnose selection, mode, data, or system problems.", "aliases": ["diagnose", "selection", "mode", "data"]}
       ],
-      "question_requirements": ["explain why the three states differ", "give the diagnostic benefit"],
-      "forbidden_claims": ["the selected target always guarantees the aircraft response"]
+      "acceptable_concepts": ["Compare the request, annunciated mode, and measured result.", "Use the distinction to avoid treating a selector position as proof of aircraft behavior."],
+      "important_incorrect_concepts": ["The selected target always guarantees the aircraft response.", "The selector alone is the authoritative indication of the active mode."],
+      "question_requirements": ["explain why the three states differ", "give the diagnostic benefit"]
     },
     {
       "id": "why-002",
@@ -52,12 +58,13 @@
       "question": "Why does weight and balance matter for A321neo performance?",
       "topic_terms": ["weight", "balance", "center of gravity", "performance"],
       "expected_key_facts": [
-        {"fact": "Weight affects acceleration, climb, stopping, and available performance margins.", "aliases": ["weight affects", "acceleration", "climb", "stopping", "performance margin"]},
-        {"fact": "Center of gravity affects stability, control, and performance.", "aliases": ["center of gravity", "cg affects", "stability", "control"]},
-        {"fact": "Operational values must come from approved aircraft-specific performance data.", "aliases": ["approved performance", "aircraft-specific", "approved data", "current data"]}
+        {"fact": "Weight affects acceleration, climb, stopping, and available performance margins.", "aliases": ["weight affects", "acceleration", "climb", "stopping"]},
+        {"fact": "Center of gravity affects stability, control, and performance.", "aliases": ["center of gravity", "cg", "stability", "control"]},
+        {"fact": "Operational values must come from approved aircraft-specific performance data.", "aliases": ["approved performance", "aircraft-specific", "approved data"]}
       ],
-      "question_requirements": ["describe weight effects", "describe balance effects", "state the data limitation"],
-      "forbidden_claims": ["a generic rule can replace the approved performance calculation"]
+      "acceptable_concepts": ["Mass changes energy and required performance; mass distribution changes trim and handling.", "Use current approved calculations rather than a generic rule."],
+      "important_incorrect_concepts": ["A generic rule can replace approved performance calculation.", "CG has no effect if total weight is unchanged."],
+      "question_requirements": ["describe weight effects", "describe balance effects", "state the data limitation"]
     },
     {
       "id": "how-001",
@@ -66,11 +73,12 @@
       "topic_terms": ["autopilot", "guidance target", "feedback", "control law"],
       "expected_key_facts": [
         {"fact": "The autopilot compares aircraft state with active guidance targets.", "aliases": ["aircraft state", "guidance target", "target and actual"]},
-        {"fact": "It uses control laws and feedback to command the aircraft.", "aliases": ["control laws", "control law", "feedback", "commands the aircraft"]},
+        {"fact": "It uses control laws and feedback to command the aircraft.", "aliases": ["control laws", "feedback", "commands the aircraft"]},
         {"fact": "The crew must monitor the mode and aircraft response.", "aliases": ["crew must monitor", "monitor the mode", "monitor aircraft response"]}
       ],
-      "question_requirements": ["describe inputs", "describe the control mechanism", "include monitoring"],
-      "forbidden_claims": ["the autopilot removes the need for monitoring"]
+      "acceptable_concepts": ["It is a closed-loop guidance function using targets, sensed state, computation, and control commands.", "The explanation includes mode awareness and monitoring."],
+      "important_incorrect_concepts": ["The autopilot removes the need for monitoring.", "It independently understands pilot intent without selected or managed targets."],
+      "question_requirements": ["describe inputs", "describe the control mechanism", "include monitoring"]
     },
     {
       "id": "how-002",
@@ -80,10 +88,11 @@
       "expected_key_facts": [
         {"fact": "The FMGS combines route, navigation, performance, aircraft-state, and database information.", "aliases": ["route", "navigation", "performance", "aircraft state", "database"]},
         {"fact": "It produces predictions and lateral or vertical guidance.", "aliases": ["predictions", "lateral", "vertical guidance", "guidance"]},
-        {"fact": "The exact result depends on aircraft standard, software, database, and inputs.", "aliases": ["aircraft standard", "software", "database", "inputs", "configuration"]}
+        {"fact": "The exact result depends on aircraft standard, software, database, and inputs.", "aliases": ["aircraft standard", "software", "database", "inputs"]}
       ],
-      "question_requirements": ["explain the main inputs", "explain the outputs", "state configuration dependence"],
-      "forbidden_claims": ["the fmgs independently guarantees the aircraft will follow every plan"]
+      "acceptable_concepts": ["It integrates entered intent with navigation and aircraft data to compute predictions and guidance.", "Outputs remain dependent on configuration and data quality."],
+      "important_incorrect_concepts": ["The FMGS guarantees the aircraft will follow every plan.", "The database alone determines all guidance without aircraft-state inputs."],
+      "question_requirements": ["explain the main inputs", "explain the outputs", "state configuration dependence"]
     },
     {
       "id": "comparison-001",
@@ -91,12 +100,13 @@
       "question": "What is the conceptual difference between managed and selected guidance?",
       "topic_terms": ["managed", "selected", "fcu", "fma"],
       "expected_key_facts": [
-        {"fact": "Managed guidance uses the flight-management profile or targets.", "aliases": ["managed uses", "flight-management profile", "fmgs profile", "managed target"]},
-        {"fact": "Selected guidance uses a crew-selected FCU target or mode.", "aliases": ["selected uses", "crew-selected", "fcu target", "selected target"]},
+        {"fact": "Managed guidance uses the flight-management profile or targets.", "aliases": ["managed uses", "flight-management profile", "fmgs profile"]},
+        {"fact": "Selected guidance uses a crew-selected FCU target or mode.", "aliases": ["selected uses", "crew-selected", "fcu target"]},
         {"fact": "The FMA must be checked to confirm the active and armed modes.", "aliases": ["fma", "active and armed", "confirm the mode"]}
       ],
-      "question_requirements": ["compare both concepts", "mention the cockpit confirmation"],
-      "forbidden_claims": ["managed is always safer than selected"]
+      "acceptable_concepts": ["Managed guidance follows computed or programmed intent; selected guidance follows a crew-selected target or mode.", "The FMA shows what is active or armed."],
+      "important_incorrect_concepts": ["Managed is always safer than selected.", "The FCU selection alone proves the mode is active."],
+      "question_requirements": ["compare both concepts", "mention the cockpit confirmation"]
     },
     {
       "id": "comparison-002",
@@ -104,12 +114,13 @@
       "question": "How should an A320 and A321neo comparison be framed without overgeneralizing?",
       "topic_terms": ["a320", "a321neo", "family", "configuration"],
       "expected_key_facts": [
-        {"fact": "They share A320 Family design and operating concepts.", "aliases": ["a320 family", "family commonality", "shared design", "common operating"]},
+        {"fact": "They share A320 Family design and operating concepts.", "aliases": ["a320 family", "family commonality", "shared design"]},
         {"fact": "Size, weight, engines, configuration, and performance can differ.", "aliases": ["size", "weight", "engines", "configuration", "performance differ"]},
-        {"fact": "Exact procedures and limits must be checked for the aircraft standard and operator.", "aliases": ["aircraft standard", "operator", "exact procedures", "limits", "approved documentation"]}
+        {"fact": "Exact procedures and limits must be checked for the aircraft standard and operator.", "aliases": ["aircraft standard", "operator", "exact procedures", "limits"]}
       ],
-      "question_requirements": ["state the commonality", "state important differences", "avoid universal claims"],
-      "forbidden_claims": ["all a320 family procedures and limits are identical"]
+      "acceptable_concepts": ["Start with commonality, then name variant-specific differences.", "Use aircraft- and operator-specific documentation for operational claims."],
+      "important_incorrect_concepts": ["All A320 Family procedures and limits are identical.", "The A321neo is merely an A320 with no performance differences."],
+      "question_requirements": ["state the commonality", "state important differences", "avoid universal claims"]
     },
     {
       "id": "troubleshooting-001",
@@ -119,10 +130,11 @@
       "expected_key_facts": [
         {"fact": "Check the selected altitude and relevant FCU input.", "aliases": ["selected altitude", "fcu input", "altitude selector"]},
         {"fact": "Check the FMA for active or armed vertical modes.", "aliases": ["fma", "active mode", "armed mode", "vertical mode"]},
-        {"fact": "Check constraints, aircraft energy or state, and data before blaming the system.", "aliases": ["constraints", "energy", "aircraft state", "data", "do not blame"]}
+        {"fact": "Check constraints, aircraft energy or state, and data before blaming the system.", "aliases": ["constraints", "energy", "aircraft state", "data"]}
       ],
-      "question_requirements": ["give an ordered diagnostic approach", "avoid declaring a system failure immediately"],
-      "forbidden_claims": ["the autopilot is definitely failed"]
+      "acceptable_concepts": ["Record the selection, annunciation, constraints, and actual trend before diagnosing failure.", "Change one simulator assumption at a time."],
+      "important_incorrect_concepts": ["The autopilot is definitely failed.", "A selected altitude alone proves that capture should occur."],
+      "question_requirements": ["give an ordered diagnostic approach", "avoid declaring a system failure immediately"]
     },
     {
       "id": "troubleshooting-002",
@@ -130,12 +142,13 @@
       "question": "What should be done when the FMA does not match what the crew expected?",
       "topic_terms": ["fma", "expected", "mode", "selection"],
       "expected_key_facts": [
-        {"fact": "Treat the FMA as the indication of active or armed modes, not the selector alone.", "aliases": ["fma", "active or armed", "selector alone", "active mode"]},
+        {"fact": "Treat the FMA as the indication of active or armed modes, not the selector alone.", "aliases": ["fma", "active or armed", "selector alone"]},
         {"fact": "Recheck the selection, engagement conditions, constraints, and aircraft state.", "aliases": ["recheck", "engagement", "conditions", "constraints", "aircraft state"]},
         {"fact": "Use the applicable approved procedure for an operational event.", "aliases": ["approved procedure", "applicable procedure", "operational event"]}
       ],
-      "question_requirements": ["distinguish selection from active mode", "give safe next checks"],
-      "forbidden_claims": ["ignore the FMA if the selector looks correct"]
+      "acceptable_concepts": ["Compare intended mode with annunciated mode and investigate inputs and conditions.", "Escalate to the applicable procedure when the situation is operational."],
+      "important_incorrect_concepts": ["Ignore the FMA if the selector looks correct.", "The unexpected annunciation is automatically a hardware failure."],
+      "question_requirements": ["distinguish selection from active mode", "give safe next checks"]
     },
     {
       "id": "system-001",
@@ -147,8 +160,9 @@
         {"fact": "It lets the crew compare the aircraft mode with the intended selection.", "aliases": ["compare", "intended selection", "crew"]},
         {"fact": "It is part of monitoring automation and does not replace procedural guidance.", "aliases": ["monitor automation", "monitoring", "does not replace", "procedure"]}
       ],
-      "question_requirements": ["define the display purpose", "explain the monitoring use"],
-      "forbidden_claims": ["the fma is only a decorative status display"]
+      "acceptable_concepts": ["The FMA is a mode-awareness and automation-monitoring source.", "It helps detect divergence between intent and active behavior."],
+      "important_incorrect_concepts": ["The FMA is only a decorative status display.", "It replaces all other aircraft indications and procedures."],
+      "question_requirements": ["define the display purpose", "explain the monitoring use"]
     },
     {
       "id": "mcdu-fmgs-001",
@@ -160,8 +174,9 @@
         {"fact": "The FMGS uses route, performance, navigation, and aircraft-state information.", "aliases": ["route", "performance", "navigation", "aircraft state"]},
         {"fact": "Entries and resulting guidance must be cross-checked against the current aircraft and database.", "aliases": ["cross-check", "current aircraft", "database", "resulting guidance"]}
       ],
-      "question_requirements": ["explain the interface relationship", "include cross-checking"],
-      "forbidden_claims": ["the mcdu directly controls every actuator"]
+      "acceptable_concepts": ["The MCDU is an interface; the FMGS is the broader management and guidance function.", "Crew entries become inputs that must be checked against indications and source data."],
+      "important_incorrect_concepts": ["The MCDU directly controls every actuator.", "A displayed prediction is automatically a guaranteed aircraft result."],
+      "question_requirements": ["explain the interface relationship", "include cross-checking"]
     },
     {
       "id": "mcdu-fmgs-002",
@@ -173,8 +188,9 @@
         {"fact": "Database status, aircraft configuration, and required inputs affect the result.", "aliases": ["database status", "configuration", "required inputs"]},
         {"fact": "The crew should cross-check entries and indications with approved procedures and sources.", "aliases": ["cross-check", "approved procedures", "approved sources"]}
       ],
-      "question_requirements": ["explain the risk", "name input dependencies", "state the verification action"],
-      "forbidden_claims": ["a successful entry proves the plan is operationally correct"]
+      "acceptable_concepts": ["Successful data entry is not the same as validated operational intent.", "Independent checks should include data, configuration, and resulting indications."],
+      "important_incorrect_concepts": ["A successful entry proves the plan is operationally correct.", "The database removes the need for crew verification."],
+      "question_requirements": ["explain the risk", "name input dependencies", "state the verification action"]
     },
     {
       "id": "fcu-fma-001",
@@ -186,8 +202,9 @@
         {"fact": "The FMA indicates which modes are active or armed.", "aliases": ["fma", "active", "armed", "modes"]},
         {"fact": "A selection alone does not prove that the expected mode is active.", "aliases": ["selection alone", "does not prove", "expected mode"]}
       ],
-      "question_requirements": ["describe both cockpit elements", "explain why they must be compared"],
-      "forbidden_claims": ["the fcu display always shows the active mode"]
+      "acceptable_concepts": ["The FCU expresses intent or a selected target; the FMA confirms mode status.", "The two should be read together with aircraft response."],
+      "important_incorrect_concepts": ["The FCU display always shows the active mode.", "Turning a selector guarantees engagement."],
+      "question_requirements": ["describe both cockpit elements", "explain why they must be compared"]
     },
     {
       "id": "flight-phases-001",
@@ -199,8 +216,9 @@
         {"fact": "Targets, constraints, configuration, and active modes can change with the phase.", "aliases": ["targets", "constraints", "configuration", "active modes", "phase"]},
         {"fact": "The crew must monitor the applicable phase-specific procedure and aircraft response.", "aliases": ["monitor", "phase-specific", "aircraft response", "procedure"]}
       ],
-      "question_requirements": ["name multiple phases", "explain what changes", "include monitoring"],
-      "forbidden_claims": ["one automation mode is universally correct for every phase"]
+      "acceptable_concepts": ["The same automation label can have different implications as energy, configuration, and constraints change.", "Phase awareness is part of monitoring."],
+      "important_incorrect_concepts": ["One automation mode is universally correct for every phase.", "A mode change removes the need to monitor the aircraft."],
+      "question_requirements": ["name multiple phases", "explain what changes", "include monitoring"]
     },
     {
       "id": "performance-001",
@@ -212,8 +230,9 @@
         {"fact": "The result should come from approved aircraft-specific performance data.", "aliases": ["approved", "aircraft-specific", "performance data"]},
         {"fact": "Generic model output should not be used as an operational clearance or limitation.", "aliases": ["not operational", "generic", "clearance", "limitation"]}
       ],
-      "question_requirements": ["list several inputs", "state how to use the result safely"],
-      "forbidden_claims": ["a fixed generic distance is valid for every runway and weight"]
+      "acceptable_concepts": ["Name several environmental, aircraft, runway, and loading inputs.", "State that approved data determines the operational result."],
+      "important_incorrect_concepts": ["A fixed generic distance is valid for every runway and weight.", "A simulator estimate can replace approved performance data."],
+      "question_requirements": ["list several inputs", "state how to use the result safely"]
     },
     {
       "id": "simulator-001",
@@ -225,8 +244,9 @@
         {"fact": "Check aircraft state, constraints, inputs, and simulator or model configuration.", "aliases": ["aircraft state", "constraints", "inputs", "simulator", "model configuration"]},
         {"fact": "Change one assumption or variable at a time and compare expected with observed behavior.", "aliases": ["one variable", "one assumption", "expected", "observed"]}
       ],
-      "question_requirements": ["give a reproducible diagnostic method", "separate observation from interpretation"],
-      "forbidden_claims": ["simulator behavior alone proves the real aircraft has the same behavior"]
+      "acceptable_concepts": ["Use a controlled observation-and-comparison method.", "Keep simulator fidelity and real-aircraft authority as separate questions."],
+      "important_incorrect_concepts": ["Simulator behavior alone proves the real aircraft has the same behavior.", "A single surprising result identifies the failed component."],
+      "question_requirements": ["give a reproducible diagnostic method", "separate observation from interpretation"]
     },
     {
       "id": "simulator-002",
@@ -236,10 +256,1056 @@
       "expected_key_facts": [
         {"fact": "Verify the edited route, constraints, discontinuities, and active guidance.", "aliases": ["route", "constraints", "discontinuities", "active guidance"]},
         {"fact": "Check navigation database status and simulator aircraft or software version.", "aliases": ["navigation database", "database status", "aircraft version", "software version"]},
-        {"fact": "Do not assume the observed result is a real-aircraft procedure or limitation without authoritative confirmation.", "aliases": ["authoritative", "real aircraft", "procedure", "limitation", "do not assume"]}
+        {"fact": "Do not assume the observed result is a real-aircraft procedure or limitation without authoritative confirmation.", "aliases": ["authoritative", "real aircraft", "procedure", "limitation"]}
       ],
-      "question_requirements": ["identify route/data checks", "separate simulator behavior from operational authority"],
-      "forbidden_claims": ["the simulator is an authoritative replacement for current aircraft documentation"]
+      "acceptable_concepts": ["Reconstruct the edit and compare the expected route computation with the displayed active result.", "Check data and model version."],
+      "important_incorrect_concepts": ["The simulator is an authoritative replacement for current aircraft documentation.", "Any route accepted by the interface is automatically valid."],
+      "question_requirements": ["identify route/data checks", "separate simulator behavior from operational authority"]
+    },
+
+    {
+      "id": "factual-003",
+      "category": "factual",
+      "question": "What is the main structural relationship between the A320neo and A321neo?",
+      "topic_terms": ["a320neo", "a321neo", "family", "variant"],
+      "expected_key_facts": [
+        {"fact": "Both are members of the A320neo family.", "aliases": ["a320neo family", "same family", "a320 family"]},
+        {"fact": "The A321neo is the larger, longer-fuselage member of the pair.", "aliases": ["larger", "longer fuselage", "larger variant"]}
+      ],
+      "acceptable_concepts": ["They share a family architecture but are not identical aircraft.", "The A321neo has a longer fuselage and different mass or performance characteristics."],
+      "important_incorrect_concepts": ["The A321neo is a wide-body derivative.", "The two variants have identical weights and performance."],
+      "question_requirements": ["state family commonality", "state the broad size difference"]
+    },
+    {
+      "id": "factual-004",
+      "category": "factual",
+      "question": "What is the purpose of fly-by-wire in the A320 family?",
+      "topic_terms": ["fly-by-wire", "flight-control computers", "actuators"],
+      "expected_key_facts": [
+        {"fact": "Pilot or automatic inputs are processed by flight-control computers.", "aliases": ["flight-control computers", "computer processing", "pilot inputs"]},
+        {"fact": "The computers command control surfaces or actuators through the applicable control laws.", "aliases": ["control laws", "actuators", "control surfaces"]}
+      ],
+      "acceptable_concepts": ["It is a digital flight-control architecture between inputs, computers, and actuators.", "The control-law layer shapes how inputs become aircraft response."],
+      "important_incorrect_concepts": ["The sidestick is mechanically connected directly to every surface.", "Fly-by-wire means the computers can ignore all pilot inputs."],
+      "question_requirements": ["identify the architecture", "describe the computer and actuator roles"]
+    },
+    {
+      "id": "factual-005",
+      "category": "factual",
+      "question": "What broad role does the ECAM have on an A320-family flight deck?",
+      "topic_terms": ["ecam", "systems", "engine", "crew awareness"],
+      "expected_key_facts": [
+        {"fact": "ECAM presents engine and system information to the crew.", "aliases": ["engine and system", "system display", "crew information"]},
+        {"fact": "It supports monitoring and awareness but does not replace the applicable procedure or source.", "aliases": ["monitoring", "awareness", "does not replace", "procedure"]}
+      ],
+      "acceptable_concepts": ["It organizes system and engine indications for flight-deck monitoring.", "Its indications must be interpreted in context."],
+      "important_incorrect_concepts": ["ECAM is a flight-management computer that generates all guidance.", "An ECAM page alone replaces a checklist or approved procedure."],
+      "question_requirements": ["describe the broad display role", "include the limitation"]
+    },
+    {
+      "id": "factual-006",
+      "category": "factual",
+      "question": "What is the conceptual purpose of an aircraft trim system?",
+      "topic_terms": ["trim", "control force", "flight controls", "aircraft state"],
+      "expected_key_facts": [
+        {"fact": "Trim changes the balance of aerodynamic or control forces for a flight condition.", "aliases": ["balance forces", "control forces", "flight condition"]},
+        {"fact": "Trim is distinct from commanding the primary maneuver itself.", "aliases": ["distinct from primary control", "not the primary maneuver", "control input"]}
+      ],
+      "acceptable_concepts": ["Trim helps reduce sustained control force or establish an appropriate balance.", "The exact implementation depends on aircraft design and mode."],
+      "important_incorrect_concepts": ["Trim is a substitute for controlling airspeed or attitude.", "Trim guarantees a fixed flight path regardless of energy or configuration."],
+      "question_requirements": ["define trim conceptually", "distinguish trim from primary control"]
+    },
+    {
+      "id": "factual-007",
+      "category": "factual",
+      "question": "What does an air data system contribute to flight-deck awareness?",
+      "topic_terms": ["air data", "pitot-static", "airspeed", "altitude", "vertical speed"],
+      "expected_key_facts": [
+        {"fact": "It provides processed pressure-derived information such as airspeed, altitude, and vertical trend.", "aliases": ["airspeed", "altitude", "vertical speed", "pressure"]},
+        {"fact": "The information supports displays, guidance, and performance computations.", "aliases": ["displays", "guidance", "performance"]}
+      ],
+      "acceptable_concepts": ["Air-data inputs describe the aircraft's relationship to surrounding air and pressure.", "Indications must be cross-checked if data quality is in doubt."],
+      "important_incorrect_concepts": ["Air data directly measures ground track.", "One air-data value is always sufficient to establish aircraft state."],
+      "question_requirements": ["name the information", "explain how it is used"]
+    },
+    {
+      "id": "factual-008",
+      "category": "factual",
+      "question": "What is the broad difference between an aircraft system indication and a control command?",
+      "topic_terms": ["indication", "command", "status", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "An indication reports a state, value, or mode.", "aliases": ["reports state", "status", "value", "mode"]},
+        {"fact": "A command requests or influences a target or action.", "aliases": ["requests", "target", "action", "command"]}
+      ],
+      "acceptable_concepts": ["A displayed value may describe what exists; a control selection expresses intent.", "The observed aircraft response is a separate layer."],
+      "important_incorrect_concepts": ["Every displayed value is a command.", "A command proves the aircraft achieved the requested result."],
+      "question_requirements": ["contrast indication and command", "mention aircraft response"]
+    },
+    {
+      "id": "factual-009",
+      "category": "factual",
+      "question": "What is the basic purpose of an aircraft navigation database?",
+      "topic_terms": ["navigation database", "waypoint", "procedure", "route"],
+      "expected_key_facts": [
+        {"fact": "It stores coded navigation and procedure information used by flight-management functions.", "aliases": ["coded navigation", "procedure information", "flight management"]},
+        {"fact": "Its currency, applicability, and aircraft compatibility matter to the result.", "aliases": ["currency", "applicability", "compatibility"]}
+      ],
+      "acceptable_concepts": ["It provides structured data rather than being a live authorization.", "The crew must verify the relevant data and source."],
+      "important_incorrect_concepts": ["The database itself is an air traffic clearance.", "A database entry is valid for every aircraft and date."],
+      "question_requirements": ["define the database role", "state why status matters"]
+    },
+
+    {
+      "id": "why-003",
+      "category": "why",
+      "question": "Why is a sidestick input not best understood as a direct command to one control surface?",
+      "topic_terms": ["sidestick", "flight-control computers", "control law", "surface"],
+      "expected_key_facts": [
+        {"fact": "The input is processed by the fly-by-wire flight-control architecture.", "aliases": ["processed", "flight-control computers", "fly-by-wire"]},
+        {"fact": "The resulting surface commands depend on control laws, aircraft state, and configuration.", "aliases": ["control laws", "aircraft state", "configuration"]}
+      ],
+      "acceptable_concepts": ["The sidestick expresses pilot input to a computer-mediated control system.", "Aircraft response depends on the current law and state."],
+      "important_incorrect_concepts": ["Moving left always moves one aileron by a fixed amount.", "The sidestick is a mechanical yoke connected directly to the surfaces."],
+      "question_requirements": ["explain the computer-mediated path", "name dependencies"]
+    },
+    {
+      "id": "why-004",
+      "category": "why",
+      "question": "Why can two aircraft with the same selected speed show different immediate behavior?",
+      "topic_terms": ["selected speed", "energy", "mode", "aircraft state"],
+      "expected_key_facts": [
+        {"fact": "Mode, energy state, configuration, thrust or drag, and flight phase affect the response.", "aliases": ["mode", "energy", "configuration", "thrust", "drag", "flight phase"]},
+        {"fact": "A selected target is an instruction or target, not a guarantee of instantaneous achievement.", "aliases": ["target", "not guarantee", "instantaneous"]}
+      ],
+      "acceptable_concepts": ["The same target can be approached through different current states and control modes.", "Compare target, active mode, trend, and actual value."],
+      "important_incorrect_concepts": ["The selected value forces identical acceleration in every condition.", "Different behavior proves one aircraft's automation is broken."],
+      "question_requirements": ["name multiple response factors", "distinguish target from result"]
+    },
+    {
+      "id": "why-005",
+      "category": "why",
+      "question": "Why does a navigation display need to be interpreted with aircraft state and mode information?",
+      "topic_terms": ["navigation display", "aircraft state", "mode", "guidance"],
+      "expected_key_facts": [
+        {"fact": "The display may show a plan, prediction, selected target, or measured result.", "aliases": ["plan", "prediction", "selected target", "measured result"]},
+        {"fact": "Mode and aircraft state determine how the displayed information relates to actual guidance.", "aliases": ["mode", "aircraft state", "actual guidance"]}
+      ],
+      "acceptable_concepts": ["A line or symbol on a display is not self-explanatory.", "Cross-check the active mode, source, and aircraft response."],
+      "important_incorrect_concepts": ["The drawn route is proof that the aircraft is tracking it.", "Display geometry alone identifies the active guidance source."],
+      "question_requirements": ["explain the interpretation problem", "state the cross-check"]
+    },
+    {
+      "id": "why-006",
+      "category": "why",
+      "question": "Why should engine indications be compared with thrust mode and aircraft response?",
+      "topic_terms": ["engine indication", "thrust", "autothrust", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "An engine parameter can show a measured value while the thrust mode expresses a target or control context.", "aliases": ["measured value", "thrust mode", "target", "control context"]},
+        {"fact": "Aircraft acceleration, speed trend, and configuration provide independent response evidence.", "aliases": ["acceleration", "speed trend", "configuration", "response"]}
+      ],
+      "acceptable_concepts": ["Use the indication, active mode, and aircraft trend as separate evidence.", "A single parameter should not be treated as the whole explanation."],
+      "important_incorrect_concepts": ["One engine display value always proves the commanded thrust.", "Autothrust means thrust cannot change with condition."],
+      "question_requirements": ["separate measured value and mode", "include independent response evidence"]
+    },
+    {
+      "id": "why-007",
+      "category": "why",
+      "question": "Why is source awareness important when explaining an A321neo system?",
+      "topic_terms": ["source awareness", "aircraft standard", "operator", "procedure"],
+      "expected_key_facts": [
+        {"fact": "Public conceptual information may not specify an aircraft's exact implementation or procedure.", "aliases": ["conceptual", "exact implementation", "procedure"]},
+        {"fact": "Aircraft standard, software, engine option, operator, and current approved documentation control operational details.", "aliases": ["aircraft standard", "software", "engine option", "operator", "approved documentation"]}
+      ],
+      "acceptable_concepts": ["Separate a general principle from a claim about a particular aircraft or operation.", "State uncertainty and identify the authoritative source needed."],
+      "important_incorrect_concepts": ["A general web explanation overrides the operator manual.", "One A321neo configuration represents every A321neo."],
+      "question_requirements": ["explain the boundary", "name authoritative dependencies"]
+    },
+    {
+      "id": "why-008",
+      "category": "why",
+      "question": "Why is it risky to diagnose a hydraulic or electrical problem from one indication alone?",
+      "topic_terms": ["hydraulic", "electrical", "indication", "cross-check"],
+      "expected_key_facts": [
+        {"fact": "An indication may represent one sensor, state, or subsystem rather than the whole aircraft function.", "aliases": ["sensor", "subsystem", "whole function"]},
+        {"fact": "Independent indications and actual aircraft effects help distinguish data, configuration, and system causes.", "aliases": ["independent indications", "aircraft effects", "data", "configuration"]}
+      ],
+      "acceptable_concepts": ["Use multiple cues and system relationships.", "A symptom should be separated from the cause being inferred."],
+      "important_incorrect_concepts": ["One caution or value identifies the failed component with certainty.", "The displayed status cannot be wrong or incomplete."],
+      "question_requirements": ["explain the diagnostic risk", "give a cross-checking principle"]
+    },
+    {
+      "id": "why-009",
+      "category": "why",
+      "question": "Why do takeoff and landing performance questions require more than aircraft weight?",
+      "topic_terms": ["takeoff", "landing", "performance", "runway", "environment"],
+      "expected_key_facts": [
+        {"fact": "Runway, wind, temperature, pressure altitude, slope, surface, obstacles, configuration, and weight can all matter.", "aliases": ["runway", "wind", "temperature", "pressure altitude", "slope", "obstacles", "configuration", "weight"]},
+        {"fact": "The interaction must be evaluated with approved aircraft-specific data.", "aliases": ["approved", "aircraft-specific", "performance data"]}
+      ],
+      "acceptable_concepts": ["Performance is a multi-input calculation, not a weight-only lookup.", "The approved result is tied to the aircraft and conditions."],
+      "important_incorrect_concepts": ["Weight alone determines a safe runway distance.", "A generic chart is valid for every runway and variant."],
+      "question_requirements": ["name multiple inputs", "state the data requirement"]
+    },
+
+    {
+      "id": "how-003",
+      "category": "how",
+      "question": "How does an A320-family flight-control computer turn a pilot input into aircraft response?",
+      "topic_terms": ["flight-control computer", "sidestick", "control law", "actuator"],
+      "expected_key_facts": [
+        {"fact": "The computer receives pilot input and aircraft-state information.", "aliases": ["pilot input", "aircraft state", "flight-control computer"]},
+        {"fact": "Applicable control laws calculate commands for actuators or control surfaces.", "aliases": ["control laws", "commands", "actuators", "surfaces"]},
+        {"fact": "The result depends on the active law, configuration, and aircraft condition.", "aliases": ["active law", "configuration", "aircraft condition"]}
+      ],
+      "acceptable_concepts": ["Input, sensing, computation, actuation, and feedback form the chain.", "The chain is not a fixed one-to-one mechanical mapping."],
+      "important_incorrect_concepts": ["The computer merely relays a mechanical sidestick movement.", "The same input always produces the same surface movement in every law."],
+      "question_requirements": ["describe the signal chain", "include control-law dependence"]
+    },
+    {
+      "id": "how-004",
+      "category": "how",
+      "question": "How does autothrust differ from a pilot directly setting engine thrust?",
+      "topic_terms": ["autothrust", "thrust levers", "engine control", "speed"],
+      "expected_key_facts": [
+        {"fact": "Autothrust is an automatic thrust-management function using targets and mode logic.", "aliases": ["automatic thrust", "targets", "mode logic"]},
+        {"fact": "Thrust-lever position and engine-control behavior are related but not identical to a simple manual thrust command.", "aliases": ["thrust levers", "engine control", "not identical"]},
+        {"fact": "The crew must monitor mode, indications, and aircraft response.", "aliases": ["monitor mode", "indications", "aircraft response"]}
+      ],
+      "acceptable_concepts": ["The system manages thrust in a control context while lever position can provide a reference.", "Explain target, mode, measured parameter, and response separately."],
+      "important_incorrect_concepts": ["Autothrust directly controls airspeed without regard to aircraft state.", "The levers always move continuously to show the exact commanded thrust."],
+      "question_requirements": ["compare automatic and manual concepts", "include monitoring"]
+    },
+    {
+      "id": "how-005",
+      "category": "how",
+      "question": "How does an ILS provide guidance conceptually?",
+      "topic_terms": ["ils", "localizer", "glideslope", "deviation"],
+      "expected_key_facts": [
+        {"fact": "The system provides lateral and vertical deviation information from approach signals.", "aliases": ["lateral", "vertical", "deviation", "approach signals"]},
+        {"fact": "The aircraft and flight guidance use the received information subject to mode, signal, and configuration conditions.", "aliases": ["flight guidance", "signal", "mode", "configuration"]}
+      ],
+      "acceptable_concepts": ["Localizer-like lateral and glideslope-like vertical information are interpreted as deviations from an approach path.", "Signal validity and active mode matter."],
+      "important_incorrect_concepts": ["ILS is a satellite navigation database.", "Receiving a signal guarantees an automatic landing in every condition."],
+      "question_requirements": ["describe lateral and vertical roles", "state the conditions"]
+    },
+    {
+      "id": "how-006",
+      "category": "how",
+      "question": "How does an inertial reference contribute to navigation when satellite input is not the only source?",
+      "topic_terms": ["inertial reference", "adirs", "position", "navigation"],
+      "expected_key_facts": [
+        {"fact": "An inertial reference estimates motion and attitude from sensed acceleration and rotation.", "aliases": ["motion", "attitude", "acceleration", "rotation"]},
+        {"fact": "Its estimate can support position and guidance computations but accumulates error over time.", "aliases": ["position", "guidance", "drift", "error over time"]}
+      ],
+      "acceptable_concepts": ["Inertial information provides continuity and aircraft-state estimates.", "It is one source that can be combined with other navigation inputs."],
+      "important_incorrect_concepts": ["Inertial navigation has no drift.", "An inertial reference is the same thing as a navigation database."],
+      "question_requirements": ["describe the sensing concept", "state the limitation"]
+    },
+    {
+      "id": "how-007",
+      "category": "how",
+      "question": "How does a fuel system support engine operation and aircraft balance?",
+      "topic_terms": ["fuel system", "tanks", "pumps", "transfer", "balance"],
+      "expected_key_facts": [
+        {"fact": "Fuel tanks, pumps, valves, lines, and controls deliver fuel toward the engines.", "aliases": ["tanks", "pumps", "valves", "lines", "engines"]},
+        {"fact": "Fuel quantity and distribution can affect loading, balance, and system status.", "aliases": ["quantity", "distribution", "balance", "system status"]},
+        {"fact": "Exact transfer logic and limits are aircraft-standard dependent.", "aliases": ["transfer logic", "aircraft standard", "limits"]}
+      ],
+      "acceptable_concepts": ["Explain delivery, monitoring, and distribution as separate functions.", "Fuel management is both propulsion support and mass-distribution management."],
+      "important_incorrect_concepts": ["Fuel is always moved only by gravity.", "All A321neo fuel-transfer logic is identical regardless of configuration."],
+      "question_requirements": ["describe delivery", "include quantity or balance", "state configuration dependence"]
+    },
+    {
+      "id": "how-008",
+      "category": "how",
+      "question": "How does the pneumatic system support several aircraft functions?",
+      "topic_terms": ["pneumatic", "bleed air", "pressurization", "air conditioning", "anti-ice"],
+      "expected_key_facts": [
+        {"fact": "A pneumatic network sources, regulates, distributes, and supplies compressed air.", "aliases": ["sources", "regulates", "distributes", "compressed air"]},
+        {"fact": "Downstream users can include environmental functions and, depending on configuration, other aircraft services.", "aliases": ["environmental", "air conditioning", "pressurization", "anti-ice"]},
+        {"fact": "Exact sources and availability depend on aircraft standard and operating condition.", "aliases": ["aircraft standard", "availability", "operating condition"]}
+      ],
+      "acceptable_concepts": ["Separate source, regulation, distribution, and user functions.", "Do not assume every pneumatic source is available in every phase."],
+      "important_incorrect_concepts": ["The pneumatic system is only a passenger-cabin ventilation fan.", "All downstream users always receive identical pressure and flow."],
+      "question_requirements": ["explain the network", "name users", "state dependencies"]
+    },
+
+    {
+      "id": "comparison-003",
+      "category": "comparisons",
+      "question": "What should be compared when distinguishing the A321neo from the A321ceo?",
+      "topic_terms": ["a321neo", "a321ceo", "engines", "configuration", "performance"],
+      "expected_key_facts": [
+        {"fact": "The labels distinguish new-engine-option and current-engine-option generations.", "aliases": ["new engine option", "current engine option", "neo", "ceo"]},
+        {"fact": "Engine installation, weight, systems, configuration, and performance can differ.", "aliases": ["engine installation", "weight", "systems", "performance"]},
+        {"fact": "Exact differences must be verified for the aircraft standard and operator.", "aliases": ["aircraft standard", "operator", "exact differences"]}
+      ],
+      "acceptable_concepts": ["Compare propulsion generation plus associated configuration and performance data.", "Avoid assuming a single universal neo-versus-ceo difference."],
+      "important_incorrect_concepts": ["CEО means the aircraft has no digital flight controls.", "Every A321neo has the same engine and limits as every A321ceo."],
+      "question_requirements": ["identify comparison dimensions", "include source awareness"]
+    },
+    {
+      "id": "comparison-004",
+      "category": "comparisons",
+      "question": "How are the FCU and MCDU different kinds of flight-deck interface?",
+      "topic_terms": ["fcu", "mcdu", "flight guidance", "flight management"],
+      "expected_key_facts": [
+        {"fact": "The FCU is associated with primary flight-guidance selections such as selected targets or modes.", "aliases": ["flight-guidance", "selected targets", "modes"]},
+        {"fact": "The MCDU is a multipurpose interface for flight-management and related entries or review.", "aliases": ["flight-management", "entries", "review", "multipurpose"]},
+        {"fact": "Both require confirmation through indications and aircraft response.", "aliases": ["confirmation", "indications", "aircraft response"]}
+      ],
+      "acceptable_concepts": ["FCU interaction is oriented toward immediate guidance selections; MCDU interaction is broader management and data entry.", "They are complementary, not interchangeable."],
+      "important_incorrect_concepts": ["The FCU is the navigation database.", "The MCDU directly moves flight-control surfaces."],
+      "question_requirements": ["compare the interfaces", "describe their complementary roles"]
+    },
+    {
+      "id": "comparison-005",
+      "category": "comparisons",
+      "question": "What is the difference between lateral navigation intent and the aircraft's actual ground track?",
+      "topic_terms": ["lateral navigation", "ground track", "route", "wind", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Lateral intent describes a planned or commanded path.", "aliases": ["planned path", "commanded path", "route intent"]},
+        {"fact": "Ground track is the measured direction of movement over the ground.", "aliases": ["ground track", "measured direction", "over the ground"]},
+        {"fact": "Wind, aircraft state, guidance mode, and navigation error can create differences.", "aliases": ["wind", "aircraft state", "guidance mode", "navigation error"]}
+      ],
+      "acceptable_concepts": ["Compare route or guidance target with actual track and trend.", "The aircraft can be pointed one way while moving over the ground another way."],
+      "important_incorrect_concepts": ["Heading and ground track are always identical.", "A drawn route proves the actual track is correct."],
+      "question_requirements": ["define both concepts", "name causes of divergence"]
+    },
+    {
+      "id": "comparison-006",
+      "category": "comparisons",
+      "question": "How should a general aircraft principle be compared with a simulator-specific behavior?",
+      "topic_terms": ["aircraft principle", "simulator", "model", "configuration"],
+      "expected_key_facts": [
+        {"fact": "The general principle explains the intended relationship or mechanism.", "aliases": ["general principle", "relationship", "mechanism"]},
+        {"fact": "Simulator behavior is an implementation that may simplify or configure that relationship.", "aliases": ["simulator", "implementation", "simplify", "configuration"]},
+        {"fact": "The simulator cannot by itself establish an approved real-aircraft procedure or limitation.", "aliases": ["approved", "real-aircraft", "procedure", "limitation"]}
+      ],
+      "acceptable_concepts": ["Use the simulator to explore hypotheses, then verify operational claims elsewhere.", "Record model version and assumptions."],
+      "important_incorrect_concepts": ["A simulator output is automatically a certification fact.", "A general principle makes every simulated detail universal."],
+      "question_requirements": ["compare the abstraction levels", "state the authority boundary"]
+    },
+    {
+      "id": "comparison-007",
+      "category": "comparisons",
+      "question": "What is the useful distinction between a prediction and a measurement on the flight deck?",
+      "topic_terms": ["prediction", "measurement", "display", "aircraft state"],
+      "expected_key_facts": [
+        {"fact": "A prediction is computed from assumptions, inputs, and a model.", "aliases": ["computed", "assumptions", "inputs", "model"]},
+        {"fact": "A measurement or sensed indication describes an observed parameter.", "aliases": ["measured", "sensed", "observed parameter"]},
+        {"fact": "Comparing them can reveal changing conditions, input errors, or model limits.", "aliases": ["compare", "changing conditions", "input errors", "model limits"]}
+      ],
+      "acceptable_concepts": ["Treat forecast and observation as separate evidence streams.", "A mismatch is a reason to investigate, not proof of a particular fault."],
+      "important_incorrect_concepts": ["Predictions are measurements.", "A mismatch automatically identifies a failed sensor."],
+      "question_requirements": ["define both terms", "explain the diagnostic value"]
+    },
+    {
+      "id": "comparison-008",
+      "category": "comparisons",
+      "question": "How does energy management differ from simply controlling airspeed?",
+      "topic_terms": ["energy management", "airspeed", "altitude", "thrust", "drag", "flight path"],
+      "expected_key_facts": [
+        {"fact": "Energy management considers airspeed, altitude, thrust, drag, and flight path together.", "aliases": ["airspeed", "altitude", "thrust", "drag", "flight path"]},
+        {"fact": "Airspeed is one measured part of the aircraft energy state, not the whole state.", "aliases": ["one part", "energy state", "not the whole"]}
+      ],
+      "acceptable_concepts": ["A speed target can be met while altitude, path, or thrust state changes.", "Use trends and configuration to understand the energy picture."],
+      "important_incorrect_concepts": ["Maintaining airspeed alone guarantees a stable flight path.", "Energy management means ignoring airspeed."],
+      "question_requirements": ["contrast the concepts", "name other energy variables"]
+    },
+
+    {
+      "id": "troubleshooting-003",
+      "category": "troubleshooting",
+      "question": "A selected heading is visible but the aircraft turns differently than expected. What diagnostic sequence is useful?",
+      "topic_terms": ["heading", "fcu", "fma", "lateral mode", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Check what heading or track target was selected and whether the input was accepted.", "aliases": ["selected heading", "target", "input accepted"]},
+        {"fact": "Check active and armed lateral modes on the FMA.", "aliases": ["active lateral mode", "armed", "fma"]},
+        {"fact": "Compare actual track, wind, aircraft state, and guidance source before concluding a fault.", "aliases": ["actual track", "wind", "aircraft state", "guidance source"]}
+      ],
+      "acceptable_concepts": ["Separate selection, mode, target type, and measured turn.", "Check whether the aircraft is following heading, track, or managed lateral intent."],
+      "important_incorrect_concepts": ["A heading selector always commands an immediate fixed turn.", "The difference proves the navigation system failed."],
+      "question_requirements": ["give ordered checks", "distinguish heading from actual response"]
+    },
+    {
+      "id": "troubleshooting-004",
+      "category": "troubleshooting",
+      "question": "A vertical path prediction changes after a mass entry. What should be investigated?",
+      "topic_terms": ["vertical path", "mass", "fmgs", "prediction", "performance"],
+      "expected_key_facts": [
+        {"fact": "Verify the entered mass and related performance inputs.", "aliases": ["mass", "performance inputs", "entered"]},
+        {"fact": "Check phase, constraints, speed assumptions, and aircraft configuration.", "aliases": ["phase", "constraints", "speed", "configuration"]},
+        {"fact": "A prediction is computed and must not be mistaken for a guaranteed aircraft trajectory.", "aliases": ["prediction", "computed", "not guaranteed"]}
+      ],
+      "acceptable_concepts": ["Mass changes the model's energy and performance assumptions.", "Compare old and new inputs before judging the result."],
+      "important_incorrect_concepts": ["The mass entry cannot affect a vertical prediction.", "The prediction alone proves the aircraft will fly that path."],
+      "question_requirements": ["name input checks", "explain why the prediction can change"]
+    },
+    {
+      "id": "troubleshooting-005",
+      "category": "troubleshooting",
+      "question": "An electrical indication disagrees with the expected system state. How should the observation be framed?",
+      "topic_terms": ["electrical", "indication", "bus", "source", "load"],
+      "expected_key_facts": [
+        {"fact": "Record the indicated source, bus or distribution state, and relevant loads.", "aliases": ["source", "bus", "distribution", "loads"]},
+        {"fact": "Compare the indication with independent system cues and actual affected functions.", "aliases": ["independent cues", "affected functions", "cross-check"]},
+        {"fact": "Use the applicable aircraft-specific procedure for operational diagnosis.", "aliases": ["aircraft-specific", "procedure", "operational"]}
+      ],
+      "acceptable_concepts": ["Describe the symptom without prematurely naming the failed component.", "Separate power source, distribution path, indication, and downstream effect."],
+      "important_incorrect_concepts": ["A single bus label identifies the only possible cause.", "The indication can be ignored if the load still works."],
+      "question_requirements": ["give a structured observation", "include cross-checking", "state procedural boundary"]
+    },
+    {
+      "id": "troubleshooting-006",
+      "category": "troubleshooting",
+      "question": "An engine parameter is normal but acceleration is not as expected. What layers should be compared?",
+      "topic_terms": ["engine", "parameter", "acceleration", "thrust mode", "aircraft state"],
+      "expected_key_facts": [
+        {"fact": "Compare the selected or commanded thrust context with the engine indication.", "aliases": ["commanded thrust", "thrust mode", "engine indication"]},
+        {"fact": "Check aircraft weight, configuration, speed, altitude, and environmental conditions.", "aliases": ["weight", "configuration", "speed", "altitude", "environment"]},
+        {"fact": "Use approved procedures and data for a real operational event.", "aliases": ["approved procedure", "approved data", "operational"]}
+      ],
+      "acceptable_concepts": ["A normal-looking parameter does not prove normal acceleration in every condition.", "Use target, measured engine value, and aircraft response as separate layers."],
+      "important_incorrect_concepts": ["One normal parameter rules out every propulsion or performance issue.", "Acceleration is independent of weight and configuration."],
+      "question_requirements": ["name the layers", "include condition checks", "state the authority boundary"]
+    },
+    {
+      "id": "troubleshooting-007",
+      "category": "troubleshooting",
+      "question": "A route contains a discontinuity after editing. What should be checked before continuing the analysis?",
+      "topic_terms": ["route", "discontinuity", "mcdu", "fmgs", "navigation database"],
+      "expected_key_facts": [
+        {"fact": "Review the sequence of legs and the exact edit that created the discontinuity.", "aliases": ["sequence", "legs", "edit", "discontinuity"]},
+        {"fact": "Check constraints, transitions, database data, and active leg or guidance.", "aliases": ["constraints", "transitions", "database", "active leg"]},
+        {"fact": "Do not infer an operationally valid route solely from a simulator or interface display.", "aliases": ["operationally valid", "simulator", "display"]}
+      ],
+      "acceptable_concepts": ["Reconstruct route intent and active route separately.", "Validate data and procedure applicability."],
+      "important_incorrect_concepts": ["A route without a visible error message is automatically flyable.", "Deleting the discontinuity is always the correct action."],
+      "question_requirements": ["name route checks", "separate data from operational validity"]
+    },
+    {
+      "id": "troubleshooting-008",
+      "category": "troubleshooting",
+      "question": "The aircraft symbol and navigation display disagree with an outside reference. What should be considered?",
+      "topic_terms": ["aircraft symbol", "navigation display", "position", "reference", "data quality"],
+      "expected_key_facts": [
+        {"fact": "Identify which reference, sensor, display, and navigation source are being compared.", "aliases": ["reference", "sensor", "display", "navigation source"]},
+        {"fact": "Check data age or quality, alignment or initialization assumptions, and aircraft state.", "aliases": ["data quality", "alignment", "initialization", "aircraft state"]},
+        {"fact": "Avoid declaring a system failure from one disagreement without independent evidence.", "aliases": ["independent evidence", "do not declare", "system failure"]}
+      ],
+      "acceptable_concepts": ["Define the two measurements before interpreting the difference.", "Use source hierarchy and cross-checks."],
+      "important_incorrect_concepts": ["The outside reference is always correct.", "A display mismatch automatically proves the inertial system failed."],
+      "question_requirements": ["identify comparison layers", "give cautious diagnostic reasoning"]
+    },
+
+    {
+      "id": "system-002",
+      "category": "system_explanations",
+      "question": "What is the conceptual role of flight-control laws in an A320-family aircraft?",
+      "topic_terms": ["flight-control laws", "sidestick", "computer", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Control laws define how pilot or automatic inputs are transformed into commands.", "aliases": ["transform inputs", "commands", "pilot inputs"]},
+        {"fact": "They use aircraft-state information and can include protections or mode-dependent behavior.", "aliases": ["aircraft state", "protections", "mode-dependent"]}
+      ],
+      "acceptable_concepts": ["Control laws are the logic layer between intent, sensed state, and actuation.", "Their behavior is not a simple fixed surface ratio."],
+      "important_incorrect_concepts": ["Control laws are only mechanical cables.", "The same law and protections apply unchanged in every degraded condition."],
+      "question_requirements": ["define the logic role", "include state or mode dependence"]
+    },
+    {
+      "id": "system-003",
+      "category": "system_explanations",
+      "question": "How should the flight director be described without confusing it with the autopilot?",
+      "topic_terms": ["flight director", "autopilot", "guidance command", "pilot"],
+      "expected_key_facts": [
+        {"fact": "The flight director presents guidance commands or cues for the crew.", "aliases": ["guidance commands", "cues", "presents"]},
+        {"fact": "The autopilot is an automatic flight-control function that can follow guidance.", "aliases": ["automatic flight control", "autopilot", "follow guidance"]},
+        {"fact": "The two can be related but are not the same function.", "aliases": ["related", "not the same", "distinct"]}
+      ],
+      "acceptable_concepts": ["FD guidance is displayed to the pilot; AP uses automatic control when engaged.", "Both depend on targets, modes, and aircraft state."],
+      "important_incorrect_concepts": ["The flight director physically moves the aircraft.", "The autopilot and flight director are always identical."],
+      "question_requirements": ["contrast both functions", "state their relationship"]
+    },
+    {
+      "id": "system-004",
+      "category": "system_explanations",
+      "question": "What does a hydraulic system contribute to aircraft control and operation?",
+      "topic_terms": ["hydraulic", "pressure", "actuators", "flight controls", "landing gear"],
+      "expected_key_facts": [
+        {"fact": "Hydraulic pressure transmits force to actuators.", "aliases": ["pressure", "transmits force", "actuators"]},
+        {"fact": "Hydraulic power can support flight-control or other aircraft functions depending on system design.", "aliases": ["flight controls", "landing gear", "aircraft functions"]},
+        {"fact": "Exact redundancy and availability depend on aircraft standard.", "aliases": ["redundancy", "availability", "aircraft standard"]}
+      ],
+      "acceptable_concepts": ["Explain source, pressure, distribution, actuation, and monitoring.", "Hydraulics provide power, not the flight-control logic itself."],
+      "important_incorrect_concepts": ["Hydraulic pressure alone decides which surface should move.", "Every hydraulic circuit powers every function identically."],
+      "question_requirements": ["describe the power role", "include configuration dependence"]
+    },
+    {
+      "id": "system-005",
+      "category": "system_explanations",
+      "question": "What is the purpose of electrical distribution rather than just electrical generation?",
+      "topic_terms": ["electrical", "generation", "distribution", "buses", "loads"],
+      "expected_key_facts": [
+        {"fact": "Generation produces electrical power, while distribution routes and manages it.", "aliases": ["generation", "distribution", "routes power"]},
+        {"fact": "Buses, protection, switching, and loads determine how functions receive power.", "aliases": ["buses", "protection", "switching", "loads"]},
+        {"fact": "The exact architecture and redundancy are aircraft-specific.", "aliases": ["architecture", "redundancy", "aircraft-specific"]}
+      ],
+      "acceptable_concepts": ["A generator is only one layer of the electrical system.", "Distribution and protection affect availability to essential functions."],
+      "important_incorrect_concepts": ["A generator powers every load directly.", "Electrical redundancy means every source is interchangeable in every condition."],
+      "question_requirements": ["contrast generation and distribution", "state architecture dependence"]
+    },
+    {
+      "id": "system-006",
+      "category": "system_explanations",
+      "question": "How are cabin pressure and cabin altitude related conceptually?",
+      "topic_terms": ["pressurization", "cabin pressure", "cabin altitude", "outflow"],
+      "expected_key_facts": [
+        {"fact": "Pressurization manages cabin pressure so cabin altitude remains within intended limits.", "aliases": ["cabin pressure", "cabin altitude", "pressurization"]},
+        {"fact": "Inflow and regulated outflow interact with aircraft altitude and system control.", "aliases": ["inflow", "outflow", "aircraft altitude", "regulation"]},
+        {"fact": "Exact limits and procedures are aircraft- and operator-specific.", "aliases": ["limits", "aircraft-specific", "operator-specific"]}
+      ],
+      "acceptable_concepts": ["Cabin altitude is a pressure-equivalent concept, not simply the aircraft's geometric altitude.", "Control depends on air supply and outflow management."],
+      "important_incorrect_concepts": ["Cabin altitude always equals aircraft altitude.", "Opening outflow always increases cabin pressure."],
+      "question_requirements": ["define the relationship", "name inflow or outflow", "state the limitation"]
+    },
+    {
+      "id": "system-007",
+      "category": "system_explanations",
+      "question": "What is the conceptual difference between anti-ice and de-ice?",
+      "topic_terms": ["anti-ice", "de-ice", "ice accumulation", "aircraft systems"],
+      "expected_key_facts": [
+        {"fact": "Anti-ice seeks to prevent or limit ice accumulation.", "aliases": ["prevent ice", "limit ice", "anti-ice"]},
+        {"fact": "De-ice generally refers to removing accumulated ice.", "aliases": ["remove ice", "accumulated ice", "de-ice"]},
+        {"fact": "Terminology and exact system operation depend on the aircraft and component.", "aliases": ["terminology", "aircraft", "component"]}
+      ],
+      "acceptable_concepts": ["The concepts differ by timing and purpose: prevention versus removal.", "Use the aircraft-specific system description for operational details."],
+      "important_incorrect_concepts": ["Anti-ice guarantees no ice can exist.", "Anti-ice and de-ice always describe the same hardware and operation."],
+      "question_requirements": ["contrast the terms", "include the source boundary"]
+    },
+    {
+      "id": "system-008",
+      "category": "system_explanations",
+      "question": "Why are spoilers useful to discuss as more than speed brakes?",
+      "topic_terms": ["spoilers", "lift", "drag", "roll", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Spoiler panels can change lift and drag.", "aliases": ["lift", "drag", "speed brake"]},
+        {"fact": "Depending on design and mode, they can contribute to roll control or ground operations.", "aliases": ["roll control", "ground operations", "mode"]},
+        {"fact": "Their exact scheduling and authority are aircraft-specific.", "aliases": ["scheduling", "authority", "aircraft-specific"]}
+      ],
+      "acceptable_concepts": ["Discuss aerodynamic effect plus function and mode.", "Avoid treating every spoiler panel as only a descent drag device."],
+      "important_incorrect_concepts": ["Spoilers only increase lift.", "All spoiler panels always deploy together for the same purpose."],
+      "question_requirements": ["name multiple roles", "state mode or design dependence"]
+    },
+    {
+      "id": "system-009",
+      "category": "system_explanations",
+      "question": "What does the landing gear system have to accomplish beyond supporting the aircraft on the ground?",
+      "topic_terms": ["landing gear", "extension", "retraction", "braking", "steering"],
+      "expected_key_facts": [
+        {"fact": "The system supports extension, retraction, locking, steering, and braking functions.", "aliases": ["extension", "retraction", "locking", "steering", "braking"]},
+        {"fact": "Its operation interacts with hydraulic, electrical, flight-control, and weight-on-wheels logic.", "aliases": ["hydraulic", "electrical", "weight-on-wheels", "flight-control"]},
+        {"fact": "Exact indications and procedures must be aircraft-specific.", "aliases": ["indications", "procedures", "aircraft-specific"]}
+      ],
+      "acceptable_concepts": ["Landing gear is a coordinated system with mechanical, power, indication, and ground-mode elements.", "Ground sensing and braking are distinct from gear support."],
+      "important_incorrect_concepts": ["Landing gear is only a passive set of wheels.", "A gear-down indication alone proves every related braking function is normal."],
+      "question_requirements": ["name several functions", "include system interactions"]
+    },
+
+    {
+      "id": "mcdu-fmgs-003",
+      "category": "mcdu_fmgs",
+      "question": "Why is a flight-plan discontinuity a reasoning problem rather than merely a display nuisance?",
+      "topic_terms": ["flight plan", "discontinuity", "route intent", "guidance"],
+      "expected_key_facts": [
+        {"fact": "A discontinuity can mean the route sequence is not continuously defined for the intended path.", "aliases": ["route sequence", "not continuously defined", "intended path"]},
+        {"fact": "The crew must understand the intended procedure and data before changing the plan.", "aliases": ["intended procedure", "data", "understand before changing"]},
+        {"fact": "The active guidance result must be checked after any edit.", "aliases": ["active guidance", "after edit", "check result"]}
+      ],
+      "acceptable_concepts": ["Treat it as an unresolved connection between route elements.", "Do not apply a memorized edit without knowing the operational intent."],
+      "important_incorrect_concepts": ["Every discontinuity should be deleted automatically.", "The display can be ignored if the aircraft is currently stable."],
+      "question_requirements": ["explain the reasoning issue", "state the verification step"]
+    },
+    {
+      "id": "mcdu-fmgs-004",
+      "category": "mcdu_fmgs",
+      "question": "How should a pilot distinguish a database procedure from a crew-entered modification?",
+      "topic_terms": ["database", "procedure", "crew entry", "route", "MCDU"],
+      "expected_key_facts": [
+        {"fact": "A database procedure is coded source data with defined applicability and structure.", "aliases": ["coded", "source data", "applicability"]},
+        {"fact": "A crew-entered modification changes or supplements the active plan through interface input.", "aliases": ["crew-entered", "modification", "active plan"]},
+        {"fact": "Both require review of constraints, sequencing, and resulting guidance.", "aliases": ["constraints", "sequencing", "resulting guidance"]}
+      ],
+      "acceptable_concepts": ["Identify the source and status of each leg.", "Crew edits do not automatically inherit every property of a published procedure."],
+      "important_incorrect_concepts": ["Any manually entered leg is equivalent to a published procedure.", "A database procedure cannot be changed or reviewed."],
+      "question_requirements": ["contrast data sources", "include resulting-plan checks"]
+    },
+    {
+      "id": "mcdu-fmgs-005",
+      "category": "mcdu_fmgs",
+      "question": "What is the difference between entering a destination and validating an approach concept?",
+      "topic_terms": ["destination", "approach", "MCDU", "procedure", "navigation database"],
+      "expected_key_facts": [
+        {"fact": "Entering a destination supplies an input to the flight-management plan.", "aliases": ["destination input", "flight-management plan"]},
+        {"fact": "An approach concept also involves procedure, runway, transition, constraints, navigation source, and aircraft conditions.", "aliases": ["procedure", "runway", "transition", "constraints", "navigation source"]},
+        {"fact": "The displayed plan does not by itself authorize or validate an operational approach.", "aliases": ["does not authorize", "operational", "validate"]}
+      ],
+      "acceptable_concepts": ["Data entry is only one step; validation includes procedure and aircraft-context checks.", "Use current approved sources."],
+      "important_incorrect_concepts": ["Selecting a destination automatically selects a valid approach.", "The database entry is an ATC clearance."],
+      "question_requirements": ["contrast entry and validation", "state the authority boundary"]
+    },
+    {
+      "id": "mcdu-fmgs-006",
+      "category": "mcdu_fmgs",
+      "question": "Why can a computed time or fuel prediction change without a route edit?",
+      "topic_terms": ["prediction", "fuel", "time", "wind", "mass", "FMGS"],
+      "expected_key_facts": [
+        {"fact": "Predictions depend on inputs such as aircraft state, mass, wind, speed, and configuration.", "aliases": ["aircraft state", "mass", "wind", "speed", "configuration"]},
+        {"fact": "Changes in assumptions or sensed data can update time and fuel without changing the route geometry.", "aliases": ["assumptions", "sensed data", "route geometry"]},
+        {"fact": "A prediction remains an estimate rather than a guarantee.", "aliases": ["estimate", "not guarantee", "prediction"]}
+      ],
+      "acceptable_concepts": ["Route and prediction inputs are different dimensions.", "Explain the change by tracing input provenance."],
+      "important_incorrect_concepts": ["Only route edits can change the prediction.", "The predicted fuel value is a measured tank quantity."],
+      "question_requirements": ["name changing inputs", "distinguish prediction from measurement"]
+    },
+    {
+      "id": "mcdu-fmgs-007",
+      "category": "mcdu_fmgs",
+      "question": "How should a source-aware explanation handle a flight-management page whose exact labels vary?",
+      "topic_terms": ["MCDU", "flight-management page", "software", "aircraft standard"],
+      "expected_key_facts": [
+        {"fact": "Describe the conceptual purpose and data relationship without claiming a universal label or layout.", "aliases": ["conceptual purpose", "data relationship", "layout"]},
+        {"fact": "Exact labels, prompts, and options depend on aircraft standard, software, and operator configuration.", "aliases": ["labels", "prompts", "software", "configuration"]},
+        {"fact": "The current approved reference should settle an operational interpretation.", "aliases": ["approved reference", "current", "operational interpretation"]}
+      ],
+      "acceptable_concepts": ["State what is generally true and qualify what is version-dependent.", "Ask for the aircraft standard or source if precision is required."],
+      "important_incorrect_concepts": ["One screenshot defines every MCDU version.", "A familiar label guarantees identical underlying logic."],
+      "question_requirements": ["give a source-aware method", "state version dependence"]
+    },
+
+    {
+      "id": "fcu-fma-002",
+      "category": "fcu_fma",
+      "question": "What should be inferred when a target is visible on the FCU but the FMA shows a different active mode?",
+      "topic_terms": ["fcu", "fma", "target", "active mode"],
+      "expected_key_facts": [
+        {"fact": "The FCU value expresses a selected target or input, while the FMA reports active or armed mode status.", "aliases": ["selected target", "input", "active", "armed"]},
+        {"fact": "Engagement conditions, managed or selected logic, constraints, and aircraft state may explain the difference.", "aliases": ["engagement", "managed", "selected", "constraints", "aircraft state"]}
+      ],
+      "acceptable_concepts": ["Investigate the relationship rather than assuming the display is contradictory.", "Use mode annunciation and aircraft trend to identify what is controlling."],
+      "important_incorrect_concepts": ["The FCU target must always override the FMA.", "The FMA can be ignored when a selector value is visible."],
+      "question_requirements": ["interpret both indications", "name possible causes"]
+    },
+    {
+      "id": "fcu-fma-003",
+      "category": "fcu_fma",
+      "question": "Why is an armed mode different from an active mode in a flight-deck explanation?",
+      "topic_terms": ["armed mode", "active mode", "fma", "engagement condition"],
+      "expected_key_facts": [
+        {"fact": "An armed mode is prepared to engage when its conditions are met.", "aliases": ["prepared", "engage", "conditions"]},
+        {"fact": "An active mode is currently controlling or participating in guidance.", "aliases": ["currently controlling", "active", "guidance"]},
+        {"fact": "The distinction helps the crew anticipate transitions and monitor behavior.", "aliases": ["anticipate", "transitions", "monitor"]}
+      ],
+      "acceptable_concepts": ["Use FMA terminology to distinguish readiness from current authority.", "A mode can be armed without being the present control mode."],
+      "important_incorrect_concepts": ["Armed and active mean exactly the same thing.", "An armed mode is already commanding the aircraft."],
+      "question_requirements": ["define both states", "explain why the distinction matters"]
+    },
+    {
+      "id": "fcu-fma-004",
+      "category": "fcu_fma",
+      "question": "How should selected versus managed speed be analyzed when the aircraft speed trend changes?",
+      "topic_terms": ["selected speed", "managed speed", "fcu", "fma", "trend"],
+      "expected_key_facts": [
+        {"fact": "Identify whether the speed target is crew-selected or computed or managed.", "aliases": ["crew-selected", "computed", "managed", "speed target"]},
+        {"fact": "Check active thrust or pitch-related modes, configuration, and actual trend.", "aliases": ["thrust", "pitch", "configuration", "trend"]},
+        {"fact": "A target does not eliminate the need to monitor achieved speed.", "aliases": ["target", "monitor", "achieved speed"]}
+      ],
+      "acceptable_concepts": ["Start with target source, then mode, then measured response.", "Explain trend through energy and configuration rather than label alone."],
+      "important_incorrect_concepts": ["Managed speed is always a fixed number.", "The selected target guarantees no speed trend."],
+      "question_requirements": ["give an analysis order", "include aircraft response"]
+    },
+    {
+      "id": "fcu-fma-005",
+      "category": "fcu_fma",
+      "question": "What does mode reversion mean as a concept, and why should explanations avoid inventing a universal trigger?",
+      "topic_terms": ["mode reversion", "automation", "fma", "aircraft standard"],
+      "expected_key_facts": [
+        {"fact": "Mode reversion is a change from one guidance or thrust mode to another when logic or conditions require it.", "aliases": ["change of mode", "logic", "conditions"]},
+        {"fact": "The applicable trigger and annunciation depend on aircraft standard, mode, and situation.", "aliases": ["trigger", "annunciation", "aircraft standard"]},
+        {"fact": "The FMA and approved documentation are needed for an exact interpretation.", "aliases": ["fma", "approved documentation"]}
+      ],
+      "acceptable_concepts": ["Describe the general idea while qualifying exact conditions.", "Treat the annunciated result as evidence to interpret."],
+      "important_incorrect_concepts": ["Every mode reversion has the same trigger on all aircraft.", "Reversion always means the automation has completely failed."],
+      "question_requirements": ["define the concept", "explain source awareness"]
+    },
+    {
+      "id": "fcu-fma-006",
+      "category": "fcu_fma",
+      "question": "Why should FMA monitoring continue after a crew selection appears to work?",
+      "topic_terms": ["fma", "monitoring", "selection", "mode", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "The active mode can change as conditions, constraints, or phase change.", "aliases": ["active mode", "conditions", "constraints", "phase"]},
+        {"fact": "The aircraft response may diverge from the initial expectation even when the input was accepted.", "aliases": ["response", "diverge", "input accepted"]},
+        {"fact": "Monitoring confirms continuing mode and target behavior.", "aliases": ["continuing", "mode", "target", "monitoring"]}
+      ],
+      "acceptable_concepts": ["Selection is an event; monitoring is continuous.", "Use FMA, trend, and aircraft state together."],
+      "important_incorrect_concepts": ["Once selected, a mode cannot change.", "FMA monitoring is needed only during takeoff."],
+      "question_requirements": ["explain continuous monitoring", "name changing conditions"]
+    },
+
+    {
+      "id": "flight-phases-002",
+      "category": "flight_phases",
+      "question": "What is the main reasoning difference between takeoff guidance and cruise guidance?",
+      "topic_terms": ["takeoff", "cruise", "energy", "configuration", "monitoring"],
+      "expected_key_facts": [
+        {"fact": "Takeoff is a highly configuration- and energy-sensitive phase with immediate runway and obstacle considerations.", "aliases": ["configuration", "energy", "runway", "obstacles"]},
+        {"fact": "Cruise generally emphasizes stable trajectory, navigation, fuel, and system monitoring.", "aliases": ["stable", "navigation", "fuel", "system monitoring"]},
+        {"fact": "Exact guidance and procedures are aircraft- and operator-specific.", "aliases": ["aircraft-specific", "operator-specific", "procedures"]}
+      ],
+      "acceptable_concepts": ["Different phases prioritize different constraints and margins.", "Do not transfer a cruise mental model directly to takeoff."],
+      "important_incorrect_concepts": ["Takeoff and cruise use identical priorities.", "Cruise requires no mode or system monitoring."],
+      "question_requirements": ["compare both phases", "include source awareness"]
+    },
+    {
+      "id": "flight-phases-003",
+      "category": "flight_phases",
+      "question": "How should a climb explanation connect thrust, speed, altitude, and path?",
+      "topic_terms": ["climb", "thrust", "speed", "altitude", "flight path"],
+      "expected_key_facts": [
+        {"fact": "Climb performance is an energy-management problem involving thrust, drag, speed, altitude, and aircraft mass.", "aliases": ["energy management", "thrust", "drag", "speed", "altitude", "mass"]},
+        {"fact": "The selected or managed target and active mode determine how the system seeks the path.", "aliases": ["selected", "managed", "target", "active mode"]},
+        {"fact": "Actual trend must be monitored rather than inferred from target alone.", "aliases": ["actual trend", "monitor", "target alone"]}
+      ],
+      "acceptable_concepts": ["Explain the trade between speed and climb path without asserting a fixed universal schedule.", "Separate command from response."],
+      "important_incorrect_concepts": ["More thrust always means more climb rate regardless of speed and configuration.", "A climb target guarantees the aircraft can achieve it."],
+      "question_requirements": ["connect four variables", "include monitoring"]
+    },
+    {
+      "id": "flight-phases-004",
+      "category": "flight_phases",
+      "question": "Why is descent planning not equivalent to simply reducing thrust?",
+      "topic_terms": ["descent", "energy", "path", "speed", "configuration"],
+      "expected_key_facts": [
+        {"fact": "Descent involves managing path, speed, altitude constraints, drag, configuration, and energy.", "aliases": ["path", "speed", "constraints", "drag", "configuration", "energy"]},
+        {"fact": "Thrust changes are one input among several, not the complete descent strategy.", "aliases": ["one input", "not complete", "thrust"]}
+      ],
+      "acceptable_concepts": ["A descent must satisfy both vertical-path and energy objectives.", "Configuration and constraints can change the result."],
+      "important_incorrect_concepts": ["Idle thrust alone guarantees a correct descent path.", "Reducing thrust always reduces speed immediately."],
+      "question_requirements": ["name multiple descent variables", "reject the thrust-only model"]
+    },
+    {
+      "id": "flight-phases-005",
+      "category": "flight_phases",
+      "question": "What should be monitored when transitioning from descent to approach?",
+      "topic_terms": ["descent", "approach", "configuration", "constraints", "guidance"],
+      "expected_key_facts": [
+        {"fact": "Monitor active guidance and thrust modes, target changes, speed, path, and configuration.", "aliases": ["guidance modes", "thrust modes", "targets", "speed", "path", "configuration"]},
+        {"fact": "Confirm the intended approach data and constraints before relying on the resulting guidance.", "aliases": ["approach data", "constraints", "intended", "guidance"]}
+      ],
+      "acceptable_concepts": ["Treat the transition as a change in energy and mode priorities.", "Use independent indications instead of assuming continuity."],
+      "important_incorrect_concepts": ["The descent mode automatically proves approach guidance is configured.", "Configuration changes need no monitoring if the path looks stable."],
+      "question_requirements": ["name monitoring areas", "include approach-data verification"]
+    },
+    {
+      "id": "flight-phases-006",
+      "category": "flight_phases",
+      "question": "Why does landing require both flight-path awareness and configuration awareness?",
+      "topic_terms": ["landing", "flight path", "configuration", "energy", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Landing performance and handling depend on speed, path, mass, wind, surface, and configuration.", "aliases": ["speed", "path", "mass", "wind", "surface", "configuration"]},
+        {"fact": "The crew must compare commanded or displayed targets with actual aircraft response.", "aliases": ["targets", "displayed", "actual response", "compare"]}
+      ],
+      "acceptable_concepts": ["A stable path is not the same as a complete landing assessment.", "Configuration and environmental conditions affect margins."],
+      "important_incorrect_concepts": ["Landing is safe whenever the aircraft symbol is on the runway centerline.", "Configuration has no effect once approach guidance is active."],
+      "question_requirements": ["connect path and configuration", "include actual response"]
+    },
+    {
+      "id": "flight-phases-007",
+      "category": "flight_phases",
+      "question": "How should cruise monitoring differ from a hands-off assumption?",
+      "topic_terms": ["cruise", "automation", "fuel", "navigation", "systems"],
+      "expected_key_facts": [
+        {"fact": "Automation can reduce workload but still requires monitoring of modes, navigation, fuel, weather, and systems.", "aliases": ["automation", "modes", "navigation", "fuel", "weather", "systems"]},
+        {"fact": "Changes in inputs or conditions can change predictions and aircraft response.", "aliases": ["inputs", "conditions", "predictions", "response"]}
+      ],
+      "acceptable_concepts": ["Cruise monitoring is active supervision, not abandonment of the flight path.", "Use trends and independent cues."],
+      "important_incorrect_concepts": ["Automation makes cruise monitoring unnecessary.", "A stable moment proves future behavior will remain unchanged."],
+      "question_requirements": ["reject hands-off reasoning", "name monitoring domains"]
+    },
+    {
+      "id": "flight-phases-008",
+      "category": "flight_phases",
+      "question": "Why can an approach target be correct while the aircraft is still not in the desired energy state?",
+      "topic_terms": ["approach", "target", "energy", "speed", "configuration"],
+      "expected_key_facts": [
+        {"fact": "A target is a reference, while actual energy depends on speed, altitude, path, mass, thrust, drag, and configuration.", "aliases": ["reference", "speed", "altitude", "path", "thrust", "drag", "configuration"]},
+        {"fact": "Trend and aircraft response must be evaluated in addition to the target.", "aliases": ["trend", "aircraft response", "target"]}
+      ],
+      "acceptable_concepts": ["Target validity and achieved state are separate checks.", "Explain excess or deficit energy through multiple variables."],
+      "important_incorrect_concepts": ["A correct target guarantees a stable approach.", "Energy state can be inferred from speed alone."],
+      "question_requirements": ["distinguish target and state", "name energy variables"]
+    },
+    {
+      "id": "flight-phases-009",
+      "category": "flight_phases",
+      "question": "What makes a takeoff scenario especially sensitive to incorrect assumptions?",
+      "topic_terms": ["takeoff", "performance", "configuration", "runway", "obstacles"],
+      "expected_key_facts": [
+        {"fact": "Takeoff margins depend on aircraft mass, configuration, runway, environment, and obstacles.", "aliases": ["mass", "configuration", "runway", "environment", "obstacles", "margins"]},
+        {"fact": "Small input or data errors can affect calculated performance and the resulting decision.", "aliases": ["input errors", "data errors", "calculated performance", "decision"]}
+      ],
+      "acceptable_concepts": ["Takeoff requires disciplined data provenance and approved calculations.", "Avoid replacing a specific calculation with intuition."],
+      "important_incorrect_concepts": ["A familiar runway makes generic performance assumptions safe.", "Takeoff margins depend only on engine thrust."],
+      "question_requirements": ["name sensitivity sources", "state the data principle"]
+    },
+    {
+      "id": "flight-phases-010",
+      "category": "flight_phases",
+      "question": "How can a phase-of-flight label help organize troubleshooting without proving the cause?",
+      "topic_terms": ["flight phase", "troubleshooting", "context", "cause", "aircraft state"],
+      "expected_key_facts": [
+        {"fact": "The phase gives context for expected configuration, targets, modes, and constraints.", "aliases": ["configuration", "targets", "modes", "constraints", "context"]},
+        {"fact": "It narrows relevant hypotheses but does not identify the cause by itself.", "aliases": ["hypotheses", "does not identify", "cause"]}
+      ],
+      "acceptable_concepts": ["Use phase as a prior or context, then verify observations.", "The same symptom can have different implications in different phases."],
+      "important_incorrect_concepts": ["The phase label proves which system failed.", "A symptom has one universal interpretation across all phases."],
+      "question_requirements": ["explain the organizing role", "state the limitation"]
+    },
+    {
+      "id": "flight-phases-011",
+      "category": "flight_phases",
+      "question": "Why should a landing explanation distinguish touchdown, rollout, and ground-operation states?",
+      "topic_terms": ["touchdown", "rollout", "ground operations", "braking", "spoilers"],
+      "expected_key_facts": [
+        {"fact": "Aircraft state and available functions change as the aircraft transitions from flight to ground operation.", "aliases": ["flight to ground", "aircraft state", "transition"]},
+        {"fact": "Braking, steering, spoilers, and ground-related logic have distinct roles and conditions.", "aliases": ["braking", "steering", "spoilers", "ground logic"]}
+      ],
+      "acceptable_concepts": ["Do not treat touchdown as one undifferentiated state.", "Interpret indications in the current phase and configuration."],
+      "important_incorrect_concepts": ["All flight controls remain in the same mode after touchdown.", "Wheel contact alone proves every ground system is available."],
+      "question_requirements": ["name the state transition", "contrast relevant functions"]
+    },
+
+    {
+      "id": "performance-002",
+      "category": "performance",
+      "question": "How does density altitude influence a conceptual explanation of takeoff performance?",
+      "topic_terms": ["density altitude", "temperature", "pressure", "engine", "lift", "takeoff"],
+      "expected_key_facts": [
+        {"fact": "Higher density altitude generally changes engine, aerodynamic, and acceleration performance.", "aliases": ["engine", "aerodynamic", "acceleration", "higher density altitude"]},
+        {"fact": "Temperature, pressure altitude, weight, runway, wind, and configuration must be considered together.", "aliases": ["temperature", "pressure altitude", "weight", "runway", "wind", "configuration"]},
+        {"fact": "Operational values require approved aircraft-specific data.", "aliases": ["approved", "aircraft-specific", "data"]}
+      ],
+      "acceptable_concepts": ["Explain density as a combined atmospheric condition, not a single cockpit setting.", "Avoid assigning a universal numeric penalty."],
+      "important_incorrect_concepts": ["Density altitude affects only cabin pressurization.", "A fixed percentage correction is valid for every aircraft."],
+      "question_requirements": ["explain the concept", "name interacting inputs", "avoid unsupported numbers"]
+    },
+    {
+      "id": "performance-003",
+      "category": "performance",
+      "question": "Why can a tailwind affect takeoff and landing performance differently from a headwind?",
+      "topic_terms": ["wind", "ground speed", "takeoff", "landing", "performance"],
+      "expected_key_facts": [
+        {"fact": "Wind changes the relationship between airspeed and ground speed.", "aliases": ["airspeed", "ground speed", "wind relationship"]},
+        {"fact": "That changes runway distance and energy considerations for both takeoff and landing.", "aliases": ["runway distance", "energy", "takeoff", "landing"]},
+        {"fact": "The applicable result depends on aircraft, runway, and approved calculation.", "aliases": ["approved calculation", "aircraft", "runway"]}
+      ],
+      "acceptable_concepts": ["Reason through relative air and ground motion.", "Do not rely on a single intuition about wind without the phase and data context."],
+      "important_incorrect_concepts": ["Wind changes airspeed and ground speed in exactly the same way.", "A tailwind has no performance consequence if indicated airspeed is unchanged."],
+      "question_requirements": ["explain the relationship", "cover both phases", "state data dependence"]
+    },
+    {
+      "id": "performance-004",
+      "category": "performance",
+      "question": "What is the reasoning difference between a performance limit and a target?",
+      "topic_terms": ["performance limit", "target", "margin", "aircraft data"],
+      "expected_key_facts": [
+        {"fact": "A target is a desired or selected value used for guidance or planning.", "aliases": ["desired", "selected", "guidance", "planning"]},
+        {"fact": "A limit is a boundary that must not be exceeded or a condition that constrains operation.", "aliases": ["boundary", "must not exceed", "constraint"]},
+        {"fact": "Both require the applicable aircraft-specific source.", "aliases": ["aircraft-specific", "source", "approved"]}
+      ],
+      "acceptable_concepts": ["Target and limit have different operational meanings.", "A target may change while a limit remains a constraint, subject to source."],
+      "important_incorrect_concepts": ["Every target is a hard limit.", "Every limit is merely a suggested target."],
+      "question_requirements": ["define both concepts", "explain the operational distinction"]
+    },
+    {
+      "id": "performance-005",
+      "category": "performance",
+      "question": "Why does center of gravity belong in a performance discussion even when total mass is known?",
+      "topic_terms": ["center of gravity", "mass", "trim", "stability", "performance"],
+      "expected_key_facts": [
+        {"fact": "CG changes moments, trim requirements, stability, and control characteristics.", "aliases": ["moments", "trim", "stability", "control"]},
+        {"fact": "Those effects can alter performance or margins beyond the total-mass effect.", "aliases": ["performance", "margins", "beyond mass"]}
+      ],
+      "acceptable_concepts": ["Total mass and its distribution are separate loading dimensions.", "Use the approved envelope and performance method."],
+      "important_incorrect_concepts": ["CG is irrelevant once total mass is known.", "Any CG within a generic envelope guarantees identical performance."],
+      "question_requirements": ["explain the added dimension", "state the source requirement"]
+    },
+    {
+      "id": "performance-006",
+      "category": "performance",
+      "question": "How should obstacles be included in a takeoff-performance explanation?",
+      "topic_terms": ["obstacles", "takeoff", "climb gradient", "runway", "approved data"],
+      "expected_key_facts": [
+        {"fact": "Obstacles impose a path or climb-performance consideration beyond runway distance alone.", "aliases": ["path", "climb performance", "runway distance"]},
+        {"fact": "Aircraft mass, configuration, environment, and runway data affect the result.", "aliases": ["mass", "configuration", "environment", "runway"]},
+        {"fact": "The approved performance method supplies the applicable result.", "aliases": ["approved performance", "method", "applicable result"]}
+      ],
+      "acceptable_concepts": ["Takeoff performance includes both surface-distance and flight-path constraints.", "Do not invent a generic obstacle clearance number."],
+      "important_incorrect_concepts": ["Obstacle clearance is unrelated to climb performance.", "A runway-length check alone proves takeoff suitability."],
+      "question_requirements": ["explain the obstacle dimension", "state the calculation boundary"]
+    },
+    {
+      "id": "performance-007",
+      "category": "performance",
+      "question": "What does a performance margin mean in a conceptual answer?",
+      "topic_terms": ["performance margin", "requirement", "capability", "uncertainty"],
+      "expected_key_facts": [
+        {"fact": "A margin is the difference between available capability and a required or limiting condition.", "aliases": ["available capability", "required condition", "difference"]},
+        {"fact": "It depends on the assumptions, data quality, configuration, and applicable requirement.", "aliases": ["assumptions", "data quality", "configuration", "requirement"]}
+      ],
+      "acceptable_concepts": ["A margin is contextual rather than a universal fixed number.", "Small or uncertain margins call for source-aware verification."],
+      "important_incorrect_concepts": ["Margin means the aircraft can ignore a limit.", "A generic positive margin is valid regardless of conditions."],
+      "question_requirements": ["define margin", "name dependencies"]
+    },
+    {
+      "id": "performance-008",
+      "category": "performance",
+      "question": "Why should a model answer avoid quoting an unverified A321neo takeoff number?",
+      "topic_terms": ["a321neo", "takeoff", "performance number", "source awareness"],
+      "expected_key_facts": [
+        {"fact": "Takeoff numbers depend on aircraft configuration, mass, atmosphere, runway, obstacles, and assumptions.", "aliases": ["configuration", "mass", "atmosphere", "runway", "obstacles"]},
+        {"fact": "A credible number must come from current approved aircraft-specific performance data.", "aliases": ["current", "approved", "aircraft-specific", "performance data"]}
+      ],
+      "acceptable_concepts": ["Explain the factors and direct the reader to the authoritative calculation.", "A conceptual answer can be useful without fabricating a value."],
+      "important_incorrect_concepts": ["One published-looking number applies to every A321neo.", "A model may estimate a legal takeoff limit from general knowledge."],
+      "question_requirements": ["explain why the number is unsafe", "give a safe alternative"]
+    },
+
+    {
+      "id": "simulator-003",
+      "category": "simulator_scenarios",
+      "question": "In a simulator, the FMA changes earlier than expected during climb. How should the trainee study it?",
+      "topic_terms": ["simulator", "fma", "climb", "mode transition", "aircraft state"],
+      "expected_key_facts": [
+        {"fact": "Record the prior and new FMA states and the selected or managed targets.", "aliases": ["prior", "new", "fma", "targets"]},
+        {"fact": "Check altitude, speed, configuration, constraints, and software or model assumptions.", "aliases": ["altitude", "speed", "configuration", "constraints", "model"]},
+        {"fact": "Compare the simulator behavior with authoritative conceptual or aircraft-specific references without treating it as proof.", "aliases": ["authoritative", "aircraft-specific", "not proof"]}
+      ],
+      "acceptable_concepts": ["Analyze transition conditions and state, not just the label.", "Change one input at a time."],
+      "important_incorrect_concepts": ["Early mode change automatically means a bug.", "A simulator's FMA timing is universal across aircraft standards."],
+      "question_requirements": ["give a controlled study method", "separate model behavior from aircraft authority"]
+    },
+    {
+      "id": "simulator-004",
+      "category": "simulator_scenarios",
+      "question": "A simulated engine start shows a different indication than a study guide. What should be compared?",
+      "topic_terms": ["simulator", "engine start", "indication", "aircraft standard", "model"],
+      "expected_key_facts": [
+        {"fact": "Compare aircraft or engine variant, simulator version, modeled sequence, and indication definitions.", "aliases": ["variant", "simulator version", "sequence", "indication definition"]},
+        {"fact": "Separate generic engine-start principles from exact procedural indications.", "aliases": ["generic principle", "procedural indication", "exact"]},
+        {"fact": "Use current approved documentation for operational conclusions.", "aliases": ["approved documentation", "operational conclusions"]}
+      ],
+      "acceptable_concepts": ["Check whether the guide and model describe the same configuration.", "Treat discrepancy as a source and model-comparison problem first."],
+      "important_incorrect_concepts": ["The study guide or simulator must be universally correct.", "A different indication proves the engine is unsafe."],
+      "question_requirements": ["name comparison dimensions", "state the source boundary"]
+    },
+    {
+      "id": "simulator-005",
+      "category": "simulator_scenarios",
+      "question": "A simulator shows no predicted fuel change after a route extension. What hypotheses should be tested?",
+      "topic_terms": ["simulator", "fuel prediction", "route", "inputs", "FMGS"],
+      "expected_key_facts": [
+        {"fact": "Verify that the route edit is active and included in the computed plan.", "aliases": ["route edit", "active", "computed plan"]},
+        {"fact": "Check mass, wind, speed, fuel model, data source, and software version.", "aliases": ["mass", "wind", "speed", "fuel model", "data source", "software"]},
+        {"fact": "A simulator result is an observation to explain, not an operational fuel guarantee.", "aliases": ["observation", "not guarantee", "operational"]}
+      ],
+      "acceptable_concepts": ["Use a hypothesis table and vary one assumption at a time.", "Distinguish stale display, inactive edit, model simplification, and input issue."],
+      "important_incorrect_concepts": ["No displayed change proves no fuel will be used.", "The route length is the only fuel-prediction input."],
+      "question_requirements": ["name multiple hypotheses", "give a controlled test method"]
+    },
+    {
+      "id": "simulator-006",
+      "category": "simulator_scenarios",
+      "question": "A simulated hydraulic failure changes flight-control behavior. How should the result be interpreted?",
+      "topic_terms": ["simulator", "hydraulic", "flight controls", "degraded law", "model"],
+      "expected_key_facts": [
+        {"fact": "Record the simulated failure, affected indications, active control law or mode, and aircraft response.", "aliases": ["failure", "indications", "control law", "aircraft response"]},
+        {"fact": "Check the simulator's modeled architecture and aircraft standard.", "aliases": ["modeled architecture", "aircraft standard", "simulator"]},
+        {"fact": "Do not generalize simulated behavior into a real procedure without approved references.", "aliases": ["real procedure", "approved", "do not generalize"]}
+      ],
+      "acceptable_concepts": ["Trace power availability to control-law and response changes.", "Treat the result as model-specific until verified."],
+      "important_incorrect_concepts": ["Every hydraulic failure produces the same law change.", "The simulator alone establishes the aircraft's certified behavior."],
+      "question_requirements": ["describe the observation chain", "state the generalization limit"]
+    },
+    {
+      "id": "simulator-007",
+      "category": "simulator_scenarios",
+      "question": "During a simulated RNAV approach, the displayed path and aircraft track diverge. What should be separated?",
+      "topic_terms": ["simulator", "rnav", "approach", "path", "track", "navigation"],
+      "expected_key_facts": [
+        {"fact": "Separate programmed path, active guidance mode, navigation position, and measured ground track.", "aliases": ["programmed path", "active guidance", "position", "ground track"]},
+        {"fact": "Check database procedure, wind, aircraft state, simulator model, and display scaling or assumptions.", "aliases": ["database", "wind", "aircraft state", "model", "display"]},
+        {"fact": "An observed divergence does not by itself identify the cause or validate a real approach.", "aliases": ["does not identify", "real approach", "cause"]}
+      ],
+      "acceptable_concepts": ["Use layers of intent, computation, indication, and response.", "Reproduce the result after changing one variable."],
+      "important_incorrect_concepts": ["The path line is the measured track.", "Any simulator RNAV path is an approved approach procedure."],
+      "question_requirements": ["name the layers", "include controlled comparison"]
+    },
+    {
+      "id": "simulator-008",
+      "category": "simulator_scenarios",
+      "question": "A virtual A321neo and A320neo show the same selected mode but different speed trends. What is a reasonable study plan?",
+      "topic_terms": ["simulator", "a321neo", "a320neo", "speed trend", "configuration"],
+      "expected_key_facts": [
+        {"fact": "Hold mode, target, environment, mass, configuration, and initial state constant where possible.", "aliases": ["mode", "target", "environment", "mass", "configuration", "initial state"]},
+        {"fact": "Compare engine, aerodynamic, model, and aircraft-standard differences.", "aliases": ["engine", "aerodynamic", "model", "aircraft standard"]},
+        {"fact": "Do not infer operational interchangeability from one simulated comparison.", "aliases": ["not interchangeable", "operational", "simulated"]}
+      ],
+      "acceptable_concepts": ["Use a controlled comparison and identify confounders.", "Same mode label does not mean same dynamics or performance."],
+      "important_incorrect_concepts": ["Same selected mode must yield identical speed trends.", "The larger aircraft has no configuration-dependent difference."],
+      "question_requirements": ["give a controlled comparison", "name confounders", "state the limitation"]
+    },
+    {
+      "id": "simulator-009",
+      "category": "simulator_scenarios",
+      "question": "A simulator trainee changes one input and several displays update. How can causality be studied?",
+      "topic_terms": ["simulator", "causality", "input", "display", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Record the initial state, changed input, timing, display changes, and aircraft response.", "aliases": ["initial state", "changed input", "timing", "display changes", "response"]},
+        {"fact": "Repeat the test with one controlled change and compare expected relationships.", "aliases": ["repeat", "controlled change", "expected relationships"]},
+        {"fact": "A correlated display change is not automatically proof of a causal mechanism.", "aliases": ["correlation", "not proof", "causal"]}
+      ],
+      "acceptable_concepts": ["Use before-and-after observations and repeatability.", "Trace signals through source, computation, indication, and response."],
+      "important_incorrect_concepts": ["The first display that changes is necessarily the cause.", "One simulator run proves a universal rule."],
+      "question_requirements": ["give a causal-study method", "distinguish correlation and cause"]
+    },
+    {
+      "id": "simulator-010",
+      "category": "simulator_scenarios",
+      "question": "A model omits a system detail found in a technical reference. What is the correct conclusion?",
+      "topic_terms": ["simulator", "model fidelity", "technical reference", "system detail"],
+      "expected_key_facts": [
+        {"fact": "The model may intentionally simplify, abstract, or omit details.", "aliases": ["simplify", "abstract", "omit", "model"]},
+        {"fact": "The reference describes a different level of fidelity or an aircraft-specific implementation.", "aliases": ["fidelity", "aircraft-specific", "implementation"]},
+        {"fact": "The difference should be documented rather than silently treated as a real-aircraft fact.", "aliases": ["document", "not real-aircraft fact", "difference"]}
+      ],
+      "acceptable_concepts": ["Identify the model boundary and keep conceptual and operational claims separate.", "Check version and scope."],
+      "important_incorrect_concepts": ["The omitted detail does not exist on the real aircraft.", "Every technical reference detail must appear in every simulator."],
+      "question_requirements": ["state the cautious conclusion", "include scope or version"]
+    },
+    {
+      "id": "simulator-011",
+      "category": "simulator_scenarios",
+      "question": "In a simulator approach, a crew selection is accepted but no expected capture occurs. What evidence should be logged?",
+      "topic_terms": ["simulator", "approach", "selection", "capture", "FMA", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Log the selected target, active and armed modes, capture conditions, aircraft state, and trend.", "aliases": ["selected target", "active", "armed", "capture conditions", "aircraft state", "trend"]},
+        {"fact": "Log navigation or data source, constraints, configuration, and simulator version.", "aliases": ["navigation source", "constraints", "configuration", "simulator version"]},
+        {"fact": "Use the evidence to compare an input issue, condition issue, data issue, or model issue.", "aliases": ["input issue", "condition", "data issue", "model issue"]}
+      ],
+      "acceptable_concepts": ["Create a reproducible observation record before interpreting.", "Do not collapse all causes into 'autopilot failure'."],
+      "important_incorrect_concepts": ["A failed capture proves the real aircraft would fail.", "The selected target is sufficient evidence for expected capture."],
+      "question_requirements": ["list evidence to log", "give diagnostic categories"]
     }
   ]
 }

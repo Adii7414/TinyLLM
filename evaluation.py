@@ -385,6 +385,18 @@ def validate_behavioral_benchmark(path: str) -> Dict[str, Any]:
             )
         if not item.get("expected_key_facts"):
             raise ValueError(f"Question {item['id']!r} has no expected key facts.")
+        if not isinstance(item.get("acceptable_concepts"), list) or not item[
+            "acceptable_concepts"
+        ]:
+            raise ValueError(
+                f"Question {item['id']!r} needs acceptable concepts."
+            )
+        if not isinstance(item.get("important_incorrect_concepts"), list) or not item[
+            "important_incorrect_concepts"
+        ]:
+            raise ValueError(
+                f"Question {item['id']!r} needs important incorrect concepts."
+            )
         for fact in item["expected_key_facts"]:
             if not fact.get("fact") or not isinstance(fact.get("aliases"), list):
                 raise ValueError(f"Question {item['id']!r} has an incomplete key fact.")
