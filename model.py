@@ -1,13 +1,17 @@
 """A modern, compact decoder-only Transformer implemented directly in PyTorch."""
 
 import math
-from typing import Optional, Tuple
+from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from config import Config
+
+
+KeyValue = Tuple[torch.Tensor, torch.Tensor]
+KeyValueCache = Sequence[Optional[KeyValue]]
 
 
 class RMSNorm(nn.Module):
@@ -35,15 +39,46 @@ class RotaryEmbedding(nn.Module):
         inverse_frequency = 1.0 / (
             theta ** (torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim)
         )
+        self.register_buffer("inverse_frequency", inverse_frequency, persistent=False)
         positions = torch.arange(context_length, dtype=torch.float32)
         angles = torch.outer(positions, inverse_frequency)
         self.register_buffer("cos", angles.cos()[None, None, :, :], persistent=False)
         self.register_buffer("sin", angles.sin()[None, None, :, :], persistent=False)
 
-    def forward(self, q: torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        position_ids: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         sequence_length = q.size(-2)
-        cos = self.cos[:, :, :sequence_length, :]
-        sin = self.sin[:, :, :sequence_length, :]
+        if position_ids is None:
+            position_ids = torch.arange(sequence_length, device=q.device)
+        if position_ids.ndim != 1 or position_ids.numel() != sequence_length:
+            raise ValueError("position_ids must be a 1D tensor matching the sequence length.")
+        if torch.any(position_ids < 0):
+            raise ValueError("RoPE position IDs must be non-negative.")
+
+        position_ids = position_ids.to(device=self.cos.device, dtype=torch.long)
+        if position_ids.numel() == 0:
+            cos = self.cos[:, :, :0, :]
+            sin = self.sin[:, :, :0, :]
+        elif int(position_ids.max()) < self.cos.size(2):
+            cos = self.cos.index_select(2, position_ids)
+            sin = self.sin.index_select(2, position_ids)
+        else:
+            # Cached decoding can continue past the configured attention window.
+            # The attention cache still limits the number of visible tokens; RoPE
+            # positions remain absolute so relative positions stay consistent as
+            # the window rolls forward.
+            angles = torch.outer(
+                position_ids.to(dtype=self.inverse_frequency.dtype),
+                self.inverse_frequency,
+            )
+            cos = angles.cos()[None, None, :, :]
+            sin = angles.sin()[None, None, :, :]
+        cos = cos.to(device=q.device, dtype=q.dtype)
+        sin = sin.to(device=q.device, dtype=q.dtype)
         # Interleave the two halves so the operation matches the standard
         # rotary embedding definition while keeping the cache compact.
         cos = torch.cat((cos, cos), dim=-1).to(dtype=q.dtype)
@@ -65,22 +100,43 @@ class CausalSelfAttention(nn.Module):
         self.attention_dropout = config.dropout
         self.rotary = RotaryEmbedding(self.head_dim, config.context_length, config.rope_theta)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        past_key_value: Optional[KeyValue] = None,
+        position_offset: int = 0,
+        use_cache: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, KeyValue]]:
         batch_size, sequence_length, channels = x.shape
         q, k, v = self.query_key_value(x).split(channels, dim=2)
         q = q.view(batch_size, sequence_length, self.num_heads, self.head_dim).transpose(1, 2)
         k = k.view(batch_size, sequence_length, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(batch_size, sequence_length, self.num_heads, self.head_dim).transpose(1, 2)
-        q, k = self.rotary(q, k)
+        position_ids = torch.arange(
+            position_offset,
+            position_offset + sequence_length,
+            device=x.device,
+        )
+        q, k = self.rotary(q, k, position_ids)
+        if past_key_value is not None:
+            past_k, past_v = past_key_value
+            k = torch.cat((past_k, k), dim=2)
+            v = torch.cat((past_v, v), dim=2)
         attended = F.scaled_dot_product_attention(
             q,
             k,
             v,
             dropout_p=self.attention_dropout if self.training else 0.0,
-            is_causal=True,
+            # With a cache, every key is from the past or the current token, so
+            # an explicit causal mask is unnecessary. For a full sequence, the
+            # fused causal path preserves the original training behavior.
+            is_causal=past_key_value is None,
         )
         attended = attended.transpose(1, 2).contiguous().view(batch_size, sequence_length, channels)
-        return self.output(attended)
+        output = self.output(attended)
+        if use_cache:
+            return output, (k, v)
+        return output
 
 
 class SwiGLU(nn.Module):
@@ -105,9 +161,25 @@ class TransformerBlock(nn.Module):
         self.feed_forward_norm = RMSNorm(config.embedding_dim, config.norm_eps)
         self.feed_forward = SwiGLU(config)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attention(self.attention_norm(x))
+    def forward(
+        self,
+        x: torch.Tensor,
+        past_key_value: Optional[KeyValue] = None,
+        position_offset: int = 0,
+        use_cache: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, KeyValue]]:
+        attention_output = self.attention(
+            self.attention_norm(x),
+            past_key_value=past_key_value,
+            position_offset=position_offset,
+            use_cache=use_cache,
+        )
+        if use_cache:
+            attention_output, present_key_value = attention_output
+        x = x + attention_output
         x = x + self.feed_forward(self.feed_forward_norm(x))
+        if use_cache:
+            return x, present_key_value
         return x
 
 
@@ -141,21 +213,66 @@ class GPTModel(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(
-        self, token_ids: torch.Tensor, targets: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        self,
+        token_ids: torch.Tensor,
+        targets: Optional[torch.Tensor] = None,
+        *,
+        past_key_values: Optional[KeyValueCache] = None,
+        use_cache: bool = False,
+        position_offset: int = 0,
+    ) -> Union[
+        Tuple[torch.Tensor, Optional[torch.Tensor]],
+        Tuple[torch.Tensor, Optional[torch.Tensor], Tuple[KeyValue, ...]],
+    ]:
         _, sequence_length = token_ids.shape
-        if sequence_length > self.config.context_length:
+        if sequence_length < 1:
+            raise ValueError("token_ids must contain at least one token.")
+        if position_offset < 0:
+            raise ValueError("position_offset must be non-negative.")
+        if past_key_values is not None:
+            if len(past_key_values) != len(self.blocks):
+                raise ValueError(
+                    f"Expected {len(self.blocks)} layer caches, "
+                    f"received {len(past_key_values)}."
+                )
+            cache_lengths = {
+                key_value[0].size(2)
+                for key_value in past_key_values
+                if key_value is not None
+            }
+            if len(cache_lengths) > 1:
+                raise ValueError("All layer caches must have the same sequence length.")
+            past_length = next(iter(cache_lengths), 0)
+        else:
+            past_length = 0
+        if past_length + sequence_length > self.config.context_length:
             raise ValueError(
-                f"Sequence length {sequence_length} exceeds context length "
+                f"Cached sequence length {past_length + sequence_length} exceeds context length "
                 f"{self.config.context_length}"
             )
         x = self.token_embedding(token_ids)
-        for block in self.blocks:
-            x = block(x)
+        present_key_values: List[KeyValue] = []
+        for index, block in enumerate(self.blocks):
+            past_key_value = (
+                None if past_key_values is None else past_key_values[index]
+            )
+            block_output = block(
+                x,
+                past_key_value=past_key_value,
+                position_offset=position_offset,
+                use_cache=use_cache,
+            )
+            if use_cache:
+                x, present_key_value = block_output
+                present_key_values.append(present_key_value)
+            else:
+                x = block_output
         logits = self.language_model_head(self.final_norm(x))
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+        if use_cache:
+            return logits, loss, tuple(present_key_values)
         return logits, loss
 
     def parameter_count(self, trainable_only: bool = True) -> int:

@@ -3,12 +3,12 @@
 import argparse
 import glob
 import os
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 import torch
 
 from config import Config, DEFAULT_CONFIG
-from model import GPTModel
+from model import GPTModel, KeyValue
 from tokenizer import ByteSubwordTokenizer, load_tokenizer, tokenizer_fingerprint
 
 
@@ -54,6 +54,62 @@ def load_tokenizer_for_model(model: GPTModel) -> ByteSubwordTokenizer:
     return tokenizer
 
 
+def _sample_next_token(
+    next_logits: torch.Tensor,
+    token_ids: Sequence[int],
+    context_length: int,
+    temperature: float,
+    top_k: int,
+    top_p: float,
+    repetition_penalty: float,
+) -> int:
+    next_logits = next_logits.float()
+    if repetition_penalty > 1 and token_ids:
+        recent = set(token_ids[-context_length:])
+        for token_id in recent:
+            if next_logits[token_id] < 0:
+                next_logits[token_id] *= repetition_penalty
+            else:
+                next_logits[token_id] /= repetition_penalty
+    if temperature == 0:
+        return int(torch.argmax(next_logits).item())
+
+    next_logits = next_logits / temperature
+    if top_k > 0:
+        values, _ = torch.topk(next_logits, min(top_k, next_logits.size(-1)))
+        next_logits[next_logits < values[-1]] = -float("inf")
+    probabilities = torch.softmax(next_logits, dim=-1)
+    if top_p < 1:
+        sorted_probabilities, sorted_indices = torch.sort(
+            probabilities, descending=True
+        )
+        cumulative = torch.cumsum(sorted_probabilities, dim=-1)
+        remove = cumulative - sorted_probabilities > top_p
+        probabilities[sorted_indices[remove]] = 0
+        probabilities = probabilities / probabilities.sum()
+    return int(torch.multinomial(probabilities, num_samples=1).item())
+
+
+def _trim_kv_cache(
+    cache: Tuple[KeyValue, ...],
+    context_length: int,
+) -> Tuple[KeyValue, ...]:
+    """Keep room for one new token without changing cached position IDs."""
+    current_length = cache[0][0].size(2)
+    if current_length < context_length:
+        return cache
+    keep_length = context_length - 1
+    if keep_length == 0:
+        return tuple(
+            (keys[:, :, :0, :], values[:, :, :0, :])
+            for keys, values in cache
+        )
+    return tuple(
+        (keys[:, :, -keep_length:, :], values[:, :, -keep_length:, :])
+        for keys, values in cache
+    )
+
+
 @torch.no_grad()
 def generate_tokens(
     model: GPTModel,
@@ -64,46 +120,64 @@ def generate_tokens(
     top_p: float = 0.92,
     repetition_penalty: float = 1.08,
     eos_token_id: Optional[int] = None,
+    use_kv_cache: bool = True,
 ):
     if temperature < 0:
         raise ValueError("temperature must be non-negative")
     if top_p <= 0 or top_p > 1:
         raise ValueError("top_p must be in the range (0, 1].")
+    if top_k < 0:
+        raise ValueError("top_k must be non-negative")
     if repetition_penalty < 1:
         raise ValueError("repetition_penalty must be at least 1.")
     token_ids = list(prompt_ids)
-    for _ in range(max_tokens):
-        context = token_ids[-model.config.context_length :]
-        input_ids = torch.tensor([context], dtype=torch.long, device=next(model.parameters()).device)
-        logits, _ = model(input_ids)
-        next_logits = logits[0, -1, :].float()
-        if repetition_penalty > 1 and token_ids:
-            recent = set(token_ids[-model.config.context_length :])
-            for token_id in recent:
-                if next_logits[token_id] < 0:
-                    next_logits[token_id] *= repetition_penalty
-                else:
-                    next_logits[token_id] /= repetition_penalty
-        if temperature == 0:
-            next_token = int(torch.argmax(next_logits).item())
-        else:
-            next_logits = next_logits / temperature
-            if top_k > 0:
-                values, _ = torch.topk(next_logits, min(top_k, next_logits.size(-1)))
-                next_logits[next_logits < values[-1]] = -float("inf")
-            probabilities = torch.softmax(next_logits, dim=-1)
-            if top_p < 1:
-                sorted_probabilities, sorted_indices = torch.sort(
-                    probabilities, descending=True
-                )
-                cumulative = torch.cumsum(sorted_probabilities, dim=-1)
-                remove = cumulative - sorted_probabilities > top_p
-                probabilities[sorted_indices[remove]] = 0
-                probabilities = probabilities / probabilities.sum()
-            next_token = int(torch.multinomial(probabilities, num_samples=1).item())
+    if not token_ids:
+        raise ValueError("prompt_ids must contain at least one token.")
+    if max_tokens < 0:
+        raise ValueError("max_tokens must be non-negative.")
+    if max_tokens == 0:
+        return token_ids
+
+    device = next(model.parameters()).device
+    context_length = model.config.context_length
+    if use_kv_cache:
+        context = token_ids[-context_length:]
+        input_ids = torch.tensor([context], dtype=torch.long, device=device)
+        logits, _, cache = model(input_ids, use_cache=True)
+        next_position = len(context)
+    else:
+        logits = None
+        cache = None
+        next_position = 0
+
+    for index in range(max_tokens):
+        if not use_kv_cache:
+            context = token_ids[-context_length:]
+            input_ids = torch.tensor([context], dtype=torch.long, device=device)
+            logits, _ = model(input_ids)
+        next_logits = logits[0, -1, :]
+        next_token = _sample_next_token(
+            next_logits,
+            token_ids,
+            context_length,
+            temperature,
+            top_k,
+            top_p,
+            repetition_penalty,
+        )
         token_ids.append(next_token)
         if eos_token_id is not None and next_token == eos_token_id:
             break
+        if use_kv_cache and index + 1 < max_tokens:
+            cache = _trim_kv_cache(cache, context_length)
+            input_ids = torch.tensor([[next_token]], dtype=torch.long, device=device)
+            logits, _, cache = model(
+                input_ids,
+                past_key_values=cache,
+                use_cache=True,
+                position_offset=next_position,
+            )
+            next_position += 1
     return token_ids
 
 

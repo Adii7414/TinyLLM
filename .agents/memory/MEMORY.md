@@ -1,0 +1,1 @@
+- [Sliding-window KV cache](kv-cache-window.md) — bounded KV decoding preserves causal history but is not identical to recomputing a rebased window after eviction.
