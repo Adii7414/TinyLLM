@@ -9,7 +9,7 @@ import torch
 
 from config import Config, DEFAULT_CONFIG
 from model import GPTModel
-from tokenizer import load_tokenizer
+from tokenizer import ByteSubwordTokenizer, load_tokenizer, tokenizer_fingerprint
 
 
 def checkpoint_path(requested: Optional[str]) -> str:
@@ -29,7 +29,29 @@ def load_model(path: str, device: torch.device) -> GPTModel:
     model = GPTModel(config).to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
+    load_tokenizer_for_model(model)
     return model
+
+
+def load_tokenizer_for_model(model: GPTModel) -> ByteSubwordTokenizer:
+    """Load and verify the tokenizer contract embedded in a checkpoint."""
+    tokenizer = load_tokenizer(model.config.tokenizer_path)
+    checks = {
+        "vocab_size": (tokenizer.vocab_size, model.config.vocab_size),
+        "eos_token_id": (tokenizer.eos_token_id, model.config.eos_token_id),
+        "pad_token_id": (tokenizer.pad_token_id, model.config.pad_token_id),
+        "tokenizer_sha256": (
+            tokenizer_fingerprint(model.config.tokenizer_path),
+            model.config.tokenizer_sha256,
+        ),
+    }
+    for field, (actual, expected) in checks.items():
+        if actual != expected:
+            raise ValueError(
+                f"Checkpoint/tokenizer mismatch for {field}: "
+                f"checkpoint={expected!r}, tokenizer={actual!r}."
+            )
+    return tokenizer
 
 
 @torch.no_grad()
@@ -101,7 +123,7 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     path = checkpoint_path(args.checkpoint)
     model = load_model(path, device)
-    tokenizer = load_tokenizer(model.config.tokenizer_path)
+    tokenizer = load_tokenizer_for_model(model)
     prompt_ids = tokenizer.encode(prompt)
     output_ids = generate_tokens(
         model,

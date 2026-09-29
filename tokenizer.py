@@ -13,9 +13,10 @@ can be regenerated with ``prepare_dataset.py`` whenever the corpus changes.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from collections import Counter
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 
 BYTE_VOCAB_SIZE = 256
@@ -32,6 +33,8 @@ class ByteSubwordTokenizer:
             raise ValueError("Tokenizer vocabulary is too small.")
         if tokens[:BYTE_VOCAB_SIZE] != [bytes([value]) for value in range(BYTE_VOCAB_SIZE)]:
             raise ValueError("Tokenizer must start with the 256 byte fallback tokens.")
+        if tokens[EOS_TOKEN_ID] != b"" or tokens[PAD_TOKEN_ID] != b"":
+            raise ValueError("EOS and PAD tokens must be empty-byte special tokens.")
         self.tokens = tokens
         self.vocab_size = len(tokens)
         self.eos_token_id = EOS_TOKEN_ID
@@ -101,6 +104,14 @@ class ByteSubwordTokenizer:
     def load(cls, path: str) -> "ByteSubwordTokenizer":
         with open(path, "r", encoding="utf-8") as file:
             payload = json.load(file)
+        if payload.get("format") != "byte-subword-v1":
+            raise ValueError(f"Unsupported tokenizer format in {path!r}.")
+        if payload.get("eos_token_id") != EOS_TOKEN_ID:
+            raise ValueError(f"Tokenizer EOS ID does not match {path!r}.")
+        if payload.get("pad_token_id") != PAD_TOKEN_ID:
+            raise ValueError(f"Tokenizer PAD ID does not match {path!r}.")
+        if not isinstance(payload.get("tokens"), list):
+            raise ValueError(f"Tokenizer token table is missing in {path!r}.")
         tokens = [bytes.fromhex(value) for value in payload["tokens"]]
         tokenizer = cls(tokens)
         if payload.get("vocab_size") != tokenizer.vocab_size:
@@ -156,23 +167,25 @@ class ByteSubwordTokenizer:
         return bytes(output).decode("utf-8", errors="replace")
 
 
-def load_tokenizer(path: Optional[str] = None) -> ByteSubwordTokenizer:
-    """Load a trained tokenizer, with a useful legacy byte fallback."""
-    path = path or "tokenizer.json"
-    if os.path.exists(path):
-        return ByteSubwordTokenizer.load(path)
-    return ByteSubwordTokenizer([bytes([value]) for value in range(256)] + [b"", b""])
+def load_tokenizer(path: str) -> ByteSubwordTokenizer:
+    """Load the required trained tokenizer; never substitute a legacy tokenizer."""
+    if not path:
+        raise ValueError("A tokenizer path is required.")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Tokenizer {path!r} does not exist. "
+            "Run prepare_dataset.py before loading a model."
+        )
+    return ByteSubwordTokenizer.load(path)
 
 
-def encode(text: str) -> List[int]:
-    """Compatibility helper; trained projects should use ``load_tokenizer``."""
-    return load_tokenizer().encode(text)
+def tokenizer_fingerprint(path: str) -> str:
+    """Return the SHA-256 fingerprint of the exact tokenizer artifact."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for chunk in iter(lambda: file.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def decode(token_ids: Iterable[int]) -> str:
-    """Compatibility helper; trained projects should use ``load_tokenizer``."""
-    return load_tokenizer().decode(token_ids)
-
-
-VOCAB_SIZE = BYTE_VOCAB_SIZE
 Tokenizer = ByteSubwordTokenizer

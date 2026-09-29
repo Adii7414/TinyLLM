@@ -6,7 +6,9 @@ import time
 import torch
 
 from config import Config, DEFAULT_CONFIG
+from generate import load_tokenizer_for_model
 from model import GPTModel, describe_model
+from tokenizer import load_tokenizer, tokenizer_fingerprint
 
 
 def main() -> None:
@@ -22,9 +24,15 @@ def main() -> None:
         config = Config.from_dict(checkpoint["config"])
     else:
         config = Config.from_dict(DEFAULT_CONFIG.to_dict())
+        tokenizer = load_tokenizer(config.tokenizer_path)
+        config.vocab_size = tokenizer.vocab_size
+        config.tokenizer_sha256 = tokenizer_fingerprint(config.tokenizer_path)
+        config.eos_token_id = tokenizer.eos_token_id
+        config.pad_token_id = tokenizer.pad_token_id
     model = GPTModel(config).to(device)
     if args.checkpoint:
         model.load_state_dict(checkpoint["model_state"])
+        load_tokenizer_for_model(model)
     model.train(not args.inference_only)
     x = torch.randint(0, config.vocab_size, (args.batch_size, config.context_length), device=device)
     y = torch.randint(0, config.vocab_size, (args.batch_size, config.context_length), device=device)

@@ -4,8 +4,7 @@ import argparse
 
 import torch
 
-from generate import checkpoint_path, generate_tokens, load_model
-from tokenizer import load_tokenizer
+from generate import checkpoint_path, generate_tokens, load_model, load_tokenizer_for_model
 
 
 def main() -> None:
@@ -23,7 +22,7 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     path = checkpoint_path(args.checkpoint)
     model = load_model(path, device)
-    tokenizer = load_tokenizer(model.config.tokenizer_path)
+    tokenizer = load_tokenizer_for_model(model)
     if args.history_turns < 1:
         raise ValueError("history-turns must be positive")
     print("Local subword GPT chat.")

@@ -98,7 +98,7 @@ def prepare_dataset(
     train_output_path: str,
     validation_output_path: str,
     test_output_path: str,
-    vocab_size: int = DEFAULT_CONFIG.vocab_size,
+    vocab_size: int = DEFAULT_CONFIG.tokenizer_target_vocab_size,
     split_seed: int = DEFAULT_CONFIG.seed,
     train_ratio: float = DEFAULT_TRAIN_RATIO,
     validation_ratio: float = DEFAULT_VALIDATION_RATIO,
@@ -234,7 +234,11 @@ def main() -> None:
     parser.add_argument("--train-output", default="train_tokens.bin")
     parser.add_argument("--validation-output", default="validation_tokens.bin")
     parser.add_argument("--test-output", default="test_tokens.bin")
-    parser.add_argument("--vocab-size", type=int, default=DEFAULT_CONFIG.vocab_size)
+    parser.add_argument(
+        "--vocab-size",
+        type=int,
+        default=DEFAULT_CONFIG.tokenizer_target_vocab_size,
+    )
     parser.add_argument("--split-seed", type=int, default=DEFAULT_CONFIG.seed)
     parser.add_argument("--train-ratio", type=float, default=DEFAULT_TRAIN_RATIO)
     parser.add_argument("--validation-ratio", type=float, default=DEFAULT_VALIDATION_RATIO)

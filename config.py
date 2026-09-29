@@ -14,7 +14,10 @@ class Config:
     seed: int = 1337
 
     # Model
-    vocab_size: int = 4096
+    # Resolved from the loaded tokenizer at runtime. This target is used only
+    # when training a new tokenizer in prepare_dataset.py.
+    vocab_size: int = 0
+    tokenizer_target_vocab_size: int = 4096
     context_length: int = 1024
     embedding_dim: int = 384
     num_layers: int = 8
@@ -24,6 +27,9 @@ class Config:
     bias: bool = True
     norm_eps: float = 1e-5
     rope_theta: float = 10000.0
+    tokenizer_sha256: str = ""
+    eos_token_id: int = 0
+    pad_token_id: int = 0
 
     # Training
     batch_size: int = 8

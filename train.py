@@ -16,6 +16,7 @@ import torch
 from config import Config, DEFAULT_CONFIG
 from dataset import TokenDataset
 from model import GPTModel, describe_model
+from tokenizer import load_tokenizer, tokenizer_fingerprint
 
 
 def choose_device() -> torch.device:
@@ -86,9 +87,22 @@ def make_config(args: argparse.Namespace) -> Config:
             "The requested tokenizer does not match the dataset manifest. "
             "Regenerate the dataset or use its tokenizer."
         )
+    tokenizer = load_tokenizer(manifest_tokenizer_path)
+    actual_tokenizer_hash = tokenizer_fingerprint(manifest_tokenizer_path)
+    if tokenizer_metadata.get("sha256") != actual_tokenizer_hash:
+        raise ValueError("Tokenizer fingerprint does not match the dataset manifest.")
+    if tokenizer_metadata.get("vocab_size") != tokenizer.vocab_size:
+        raise ValueError("Tokenizer vocabulary does not match the dataset manifest.")
+    if tokenizer_metadata.get("eos_token_id") != tokenizer.eos_token_id:
+        raise ValueError("Tokenizer EOS ID does not match the dataset manifest.")
+    if tokenizer_metadata.get("pad_token_id") != tokenizer.pad_token_id:
+        raise ValueError("Tokenizer PAD ID does not match the dataset manifest.")
     config.dataset_dtype = preprocessing_metadata["dtype"]
-    config.vocab_size = int(tokenizer_metadata["vocab_size"])
+    config.vocab_size = tokenizer.vocab_size
     config.tokenizer_path = manifest_tokenizer_path
+    config.tokenizer_sha256 = actual_tokenizer_hash
+    config.eos_token_id = tokenizer.eos_token_id
+    config.pad_token_id = tokenizer.pad_token_id
     return config
 
 
@@ -159,6 +173,18 @@ def load_checkpoint(
             "dataset pipeline. Use --reset to train from the new document-split "
             "dataset instead of silently mixing data contracts."
         )
+    for field in (
+        "vocab_size",
+        "tokenizer_sha256",
+        "eos_token_id",
+        "pad_token_id",
+        "tokenizer_path",
+    ):
+        if checkpoint_config.get(field) != getattr(config, field):
+            raise ValueError(
+                f"Checkpoint {path!r} tokenizer contract does not match the "
+                f"current tokenizer ({field}). Use --reset or regenerate artifacts."
+            )
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
     return (

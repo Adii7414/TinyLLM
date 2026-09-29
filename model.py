@@ -114,6 +114,11 @@ class TransformerBlock(nn.Module):
 class GPTModel(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()
+        if config.vocab_size < 1:
+            raise ValueError(
+                "config.vocab_size is unresolved. Load a tokenizer and use its "
+                "vocab_size before constructing GPTModel."
+            )
         self.config = config
         self.token_embedding = nn.Embedding(config.vocab_size, config.embedding_dim)
         self.blocks = nn.ModuleList(
