@@ -23,6 +23,7 @@ DEFAULT_TEST_RATIO = 0.05
 TOKENIZER_TRAINING_ALGORITHM = "byte-subword-frequency-v1"
 TOKENIZER_MAX_PHRASE_LENGTH = 12
 TOKENIZER_MIN_FREQUENCY = 2
+FAMILY_MANIFEST_FORMAT = "corpus-family-manifest-v1"
 
 
 def iter_documents(source_path: str) -> Iterator[bytes]:
@@ -68,6 +69,47 @@ def document_split(
     if value < train_ratio + validation_ratio:
         return "validation"
     return "test"
+
+
+def family_split(
+    family_id: str,
+    split_seed: int,
+    train_ratio: float,
+    validation_ratio: float,
+    test_ratio: float,
+) -> str:
+    """Assign every document in a template family to the same split."""
+    return document_split(
+        family_id.encode("utf-8"),
+        split_seed,
+        train_ratio,
+        validation_ratio,
+        test_ratio,
+    )
+
+
+def load_family_assignments(
+    source_path: str, document_count: int
+) -> Optional[Dict[int, str]]:
+    """Load optional corpus-family assignments beside the source corpus."""
+    manifest_path = Path(source_path).with_suffix(".families.json")
+    if not manifest_path.exists():
+        return None
+    with open(manifest_path, "r", encoding="utf-8") as file:
+        manifest = json.load(file)
+    if manifest.get("format") != FAMILY_MANIFEST_FORMAT:
+        raise ValueError(
+            f"Unsupported family manifest format in {manifest_path!s}: "
+            f"{manifest.get('format')!r}."
+        )
+    assignments = manifest.get("document_families")
+    if not isinstance(assignments, list) or len(assignments) != document_count:
+        raise ValueError(
+            f"Family manifest {manifest_path!s} has "
+            f"{len(assignments) if isinstance(assignments, list) else 'invalid'} "
+            f"assignments for {document_count} source documents."
+        )
+    return {index: str(family) for index, family in enumerate(assignments)}
 
 
 def sha256_file(path: str) -> str:
@@ -131,18 +173,34 @@ def prepare_dataset(
     os.makedirs(os.path.dirname(tokenizer_path) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(manifest_path) or ".", exist_ok=True)
 
+    # Materialize document boundaries once so an optional family manifest can
+    # be validated and applied consistently in both passes.
+    documents = list(iter_documents(source_path))
+    family_assignments = load_family_assignments(source_path, len(documents))
+
+    def split_for(index: int, document: bytes) -> str:
+        if family_assignments is not None:
+            return family_split(
+                family_assignments[index],
+                split_seed,
+                train_ratio,
+                validation_ratio,
+                test_ratio,
+            )
+        return document_split(
+            document, split_seed, train_ratio, validation_ratio, test_ratio
+        )
+
     # First pass: assign complete documents and collect a bounded tokenizer
     # sample from training documents only. No tokenization happens here.
     tokenizer_sample = bytearray()
     document_counts = {"train": 0, "validation": 0, "test": 0}
     document_bytes = {"train": 0, "validation": 0, "test": 0}
     source_digest = hashlib.sha256()
-    for document in iter_documents(source_path):
+    for index, document in enumerate(documents):
         source_digest.update(len(document).to_bytes(8, "big"))
         source_digest.update(document)
-        split = document_split(
-            document, split_seed, train_ratio, validation_ratio, test_ratio
-        )
+        split = split_for(index, document)
         document_counts[split] += 1
         document_bytes[split] += len(document)
         if split == "train" and len(tokenizer_sample) < max_tokenizer_sample_bytes:
@@ -174,10 +232,8 @@ def prepare_dataset(
         try:
             # Second pass: reassign the same documents and write one EOS per
             # document. No output depends on the size of an I/O read chunk.
-            for document in iter_documents(source_path):
-                split = document_split(
-                    document, split_seed, train_ratio, validation_ratio, test_ratio
-                )
+            for index, document in enumerate(documents):
+                split = split_for(index, document)
                 token_ids = tokenizer.encode_bytes(document, add_eos=True)
                 np.asarray(token_ids, dtype=np.uint16).tofile(outputs[split])
                 token_counts[split] += len(token_ids)
@@ -203,7 +259,11 @@ def prepare_dataset(
         },
         "split": {
             "seed": split_seed,
-            "method": "sha256(seed + document_bytes)",
+            "method": (
+                "sha256(seed + family_id)"
+                if family_assignments is not None
+                else "sha256(seed + document_bytes)"
+            ),
             "ratios": {
                 "train": train_ratio,
                 "validation": validation_ratio,
@@ -225,6 +285,25 @@ def prepare_dataset(
             "max_phrase_length": TOKENIZER_MAX_PHRASE_LENGTH,
             "min_frequency": TOKENIZER_MIN_FREQUENCY,
             "training_source": "train_documents_only",
+        },
+        "family_grouping": {
+            "enabled": family_assignments is not None,
+            "manifest_path": (
+                str(Path(source_path).with_suffix(".families.json"))
+                if family_assignments is not None
+                else None
+            ),
+            "family_count": (
+                len(set(family_assignments.values()))
+                if family_assignments is not None
+                else 0
+            ),
+            "policy": (
+                "All documents with the same template-family ID are assigned "
+                "to one partition."
+                if family_assignments is not None
+                else "No family manifest was found; documents are assigned individually."
+            ),
         },
         "isolation": {
             "partitions": "separate_document_disjoint_files",

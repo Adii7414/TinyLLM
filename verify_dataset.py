@@ -17,7 +17,9 @@ from prepare_dataset import (
     TOKENIZER_MIN_FREQUENCY,
     TOKENIZER_TRAINING_ALGORITHM,
     document_split,
+    family_split,
     iter_documents,
+    load_family_assignments,
     sha256_file,
 )
 from tokenizer import ByteSubwordTokenizer
@@ -270,15 +272,36 @@ def verify_dataset(manifest_path: str = "dataset_manifest.json") -> Dict[str, An
         sample_limit = 0
     source_digest = hashlib.sha256()
     try:
-        for document in iter_documents(source_path):
-            _source_digest_update(source_digest, document)
-            assigned = document_split(
-                document,
-                split_seed,
-                train_ratio,
-                validation_ratio,
-                test_ratio,
+        documents = list(iter_documents(source_path))
+        family_assignments = load_family_assignments(source_path, len(documents))
+        grouping_metadata = manifest.get("family_grouping", {})
+        grouping_enabled = (
+            isinstance(grouping_metadata, dict)
+            and grouping_metadata.get("enabled") is True
+        )
+        if grouping_enabled and family_assignments is None:
+            errors.append(
+                "Manifest requires family grouping, but the adjacent family "
+                "manifest could not be loaded."
             )
+        for index, document in enumerate(documents):
+            _source_digest_update(source_digest, document)
+            if family_assignments is not None:
+                assigned = family_split(
+                    family_assignments[index],
+                    split_seed,
+                    train_ratio,
+                    validation_ratio,
+                    test_ratio,
+                )
+            else:
+                assigned = document_split(
+                    document,
+                    split_seed,
+                    train_ratio,
+                    validation_ratio,
+                    test_ratio,
+                )
             document_counts[assigned] += 1
             document_bytes[assigned] += len(document)
             documents_by_split[assigned].append(document)
