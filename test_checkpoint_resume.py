@@ -45,12 +45,10 @@ class CheckpointResumeTests(unittest.TestCase):
             dataset_manifest_path=str(Path(directory) / "dataset_manifest.json"),
             tokenizer_path=str(Path(directory) / "tokenizer.json"),
             dataset_identity={
-                "manifest_sha256": "manifest-hash",
-                "source_content_hash": "source-hash",
-                "split_hashes": {
+                "tokenizer_sha256": "tokenizer-hash",
+                "training_split_hashes": {
                     "train": "train-hash",
                     "validation": "validation-hash",
-                    "test": "test-hash",
                 },
                 "format": "document-split-v2",
             },
@@ -74,13 +72,13 @@ class CheckpointResumeTests(unittest.TestCase):
 
     def make_runtime(self, directory: str, config: Config):
         data_paths = []
-        for name, seed in (("train", 11), ("validation", 22), ("test", 33)):
+        for name, seed in (("train", 11), ("validation", 22)):
             path = Path(directory) / f"{name}.bin"
             (np.arange(seed, seed + 256, dtype=np.uint16) % config.vocab_size).tofile(path)
             data_paths.append(str(path))
         datasets = [
             TokenDataset(path, config.context_length, seed, config.dataset_dtype)
-            for path, seed in zip(data_paths, (1, 2, 3))
+            for path, seed in zip(data_paths, (1, 2))
         ]
         model = GPTModel(config)
         optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
@@ -125,7 +123,7 @@ class CheckpointResumeTests(unittest.TestCase):
             self.assertTrue(Path(checkpoint_path).exists())
             self.assertFalse(Path(checkpoint_path + ".partial").exists())
             saved = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-            self.assertEqual(saved["checkpoint_format"], "training-checkpoint-v2")
+            self.assertEqual(saved["checkpoint_format"], "training-checkpoint-v3")
             for key in (
                 "model_state",
                 "optimizer_state",
@@ -138,9 +136,9 @@ class CheckpointResumeTests(unittest.TestCase):
                 "python_rng_state",
                 "train_dataset_rng_state",
                 "validation_dataset_rng_state",
-                "test_dataset_rng_state",
             ):
                 self.assertIn(key, saved)
+            self.assertNotIn("test_dataset_rng_state", saved)
 
             expected_model = {
                 key: value.detach().clone()

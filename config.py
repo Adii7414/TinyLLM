@@ -12,7 +12,6 @@ class Config:
     tokenizer_path: str = "tokenizer.json"
     dataset_dtype: str = "uint16"
     validation_evaluation_path: str = "evaluation/validation_eval.json"
-    test_evaluation_path: str = "evaluation/test_eval.json"
     behavioral_benchmark_path: str = "evaluation/a321neo_behavioral_benchmark.json"
     dataset_identity: Dict[str, Any] = field(default_factory=dict)
     seed: int = 1337

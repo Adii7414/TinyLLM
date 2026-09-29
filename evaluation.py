@@ -69,6 +69,21 @@ def load_manifest(path: str) -> Dict[str, Any]:
     for split in ("train", "validation", "test"):
         if split not in manifest.get("splits", {}):
             raise ValueError(f"Dataset manifest is missing the {split!r} split.")
+    tokenizer = manifest.get("tokenizer", {})
+    if tokenizer.get("training_source") != "train_documents_only":
+        raise ValueError(
+            "Dataset tokenizer provenance is not train-only; refusing evaluation "
+            "for a dataset that may have seen validation or test documents."
+        )
+    split_paths = [
+        os.path.normcase(os.path.abspath(str(manifest["splits"][split]["path"])))
+        for split in ("train", "validation", "test")
+    ]
+    if len(set(split_paths)) != len(split_paths):
+        raise ValueError(
+            "Train, validation, and test must be separate token files; "
+            "the manifest contains overlapping split paths."
+        )
     return manifest
 
 
@@ -112,6 +127,9 @@ def create_fixed_evaluation_set(
         ]
     metadata = {
         "format": FIXED_EVALUATION_FORMAT,
+        "evaluation_set_id": (
+            "fixed-validation-v1" if split == "validation" else "fixed-final-test-v1"
+        ),
         "role": "final_test" if split == "test" else "checkpoint_validation",
         "split": split,
         "manifest_path": manifest_path,
@@ -127,6 +145,18 @@ def create_fixed_evaluation_set(
             "This set may be used for checkpoint selection."
             if split == "validation"
             else "This set is final-only and must not be used for training or selection."
+        ),
+        "prohibited_uses": (
+            []
+            if split == "validation"
+            else [
+                "tokenizer_training",
+                "model_training",
+                "hyperparameter_selection",
+                "checkpoint_selection",
+                "prompt_engineering",
+                "instruction_fine_tuning_decisions",
+            ]
         ),
     }
     atomic_json_write(output_path, metadata)
@@ -147,6 +177,14 @@ def load_fixed_evaluation_set(
         raise ValueError(
             f"Evaluation set {path!r} is for {metadata.get('split')!r}, "
             f"not {expected_split!r}."
+        )
+    expected_set_id = (
+        "fixed-validation-v1" if expected_split == "validation" else "fixed-final-test-v1"
+    )
+    if metadata.get("evaluation_set_id") not in {None, expected_set_id}:
+        raise ValueError(
+            f"Evaluation set {path!r} has id {metadata.get('evaluation_set_id')!r}; "
+            f"expected {expected_set_id!r}."
         )
     expected_role = (
         "checkpoint_validation" if expected_split == "validation" else "final_test"
@@ -319,6 +357,13 @@ def validate_behavioral_benchmark(path: str) -> Dict[str, Any]:
         benchmark = json.load(file)
     if benchmark.get("format") != BEHAVIORAL_FORMAT:
         raise ValueError(f"Unsupported behavioral benchmark format in {path!r}.")
+    policy = benchmark.get("policy", {})
+    if policy.get("test_set_is_not_used") is not True:
+        raise ValueError("Behavioral benchmark must explicitly exclude the final test set.")
+    if policy.get("manual_curation") is not True:
+        raise ValueError("Behavioral benchmark must be marked as manually curated.")
+    if policy.get("no_single_composite_score") is not True:
+        raise ValueError("Behavioral benchmark must keep dimensions separate.")
     questions = benchmark.get("questions")
     if not isinstance(questions, list) or not questions:
         raise ValueError("Behavioral benchmark must contain questions.")
@@ -329,10 +374,19 @@ def validate_behavioral_benchmark(path: str) -> Dict[str, Any]:
     for item in questions:
         if not item.get("id") or not item.get("question"):
             raise ValueError("Every behavioral question needs an id and question.")
+        if item.get("category") not in BEHAVIORAL_CATEGORIES:
+            raise ValueError(
+                f"Question {item.get('id')!r} has an unsupported category "
+                f"{item.get('category')!r}."
+            )
+        if not item.get("topic_terms") or not item.get("question_requirements"):
+            raise ValueError(
+                f"Question {item['id']!r} needs topic terms and question requirements."
+            )
         if not item.get("expected_key_facts"):
             raise ValueError(f"Question {item['id']!r} has no expected key facts.")
         for fact in item["expected_key_facts"]:
-            if not fact.get("fact") or not fact.get("aliases"):
+            if not fact.get("fact") or not isinstance(fact.get("aliases"), list):
                 raise ValueError(f"Question {item['id']!r} has an incomplete key fact.")
     return benchmark
 
@@ -397,13 +451,30 @@ def evaluate_behavioral(
             "automatic": score_behavioral_answer(item, answer),
             "manual_review": {
                 "required": True,
-                "dimensions": [
-                    "relevance",
-                    "factual_correctness",
-                    "completeness",
-                    "hallucination",
-                    "question_following",
-                ],
+                "dimensions": {
+                    "relevance": {
+                        "scale": "0-4",
+                        "guidance": "Does the answer directly address the question?"
+                    },
+                    "factual_correctness": {
+                        "scale": "0-4",
+                        "guidance": "Are claims accurate for the stated conceptual scope?"
+                    },
+                    "completeness": {
+                        "scale": "0-4",
+                        "guidance": "Does it cover the expected key facts?"
+                    },
+                    "hallucination": {
+                        "scale": "0-4 risk",
+                        "guidance": "How much unsupported or invented content is present?"
+                    },
+                    "question_following": {
+                        "scale": "0-4",
+                        "guidance": "Does it follow the requested question type and requirements?"
+                    },
+                },
+                "scores": None,
+                "notes": "",
                 "note": "Automatic results are transparent proxies; record expert judgments separately rather than collapsing them into one score.",
             },
         })

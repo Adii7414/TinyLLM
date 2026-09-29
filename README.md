@@ -38,8 +38,9 @@ python -m pip install -r requirements.txt
 ```
 
 Prepare the included sample text. This first assigns complete blank-line-
-delimited documents to train/validation/test, trains `tokenizer.json` using
-training documents only, and then creates three compact `uint16` token files:
+delimited documents to three disjoint partitions, trains `tokenizer.json`
+using TRAIN documents only, and then creates three separate compact `uint16`
+token files:
 
 ```bash
 python prepare_dataset.py
@@ -63,8 +64,9 @@ dataset_manifest.json
 ```
 
 The manifest records split counts, token counts, source and output hashes,
-tokenizer provenance, and preprocessing settings. `train.py` rejects the old
-single-file token-offset metadata instead of silently using it.
+tokenizer provenance, preprocessing settings, and the isolation policy.
+`train.py` rejects the old single-file token-offset metadata instead of
+silently using it.
 
 Train from scratch. The default schedule includes gradient accumulation,
 warmup, cosine decay, mixed precision on CUDA, validation, and atomic
@@ -95,8 +97,10 @@ python evaluation.py --mode create-fixed
 ```
 
 Training uses only `evaluation/validation_eval.json` for checkpoint selection.
-The final test windows in `evaluation/test_eval.json` are never used for
-training, selection, or tuning.
+The training process never loads the TEST token file or final-test evaluation
+windows. The final test windows in `evaluation/test_eval.json` are reserved
+for evaluation after training, hyperparameters, prompts, and
+instruction-tuning decisions are complete.
 
 Evaluate a checkpoint with cross-entropy and perplexity reported separately:
 
@@ -114,7 +118,8 @@ python evaluation.py --mode behavioral --checkpoint checkpoints/best_model.pt
 The behavioral report keeps relevance, factual correctness, completeness,
 hallucination risk, and question-following as separate dimensions. Automatic
 checks are transparent proxies and each answer is marked for expert review;
-there is no composite score.
+there is no composite score. The final TEST set and behavioral benchmark are
+not tuning data.
 
 Start at step zero with new random weights. Existing checkpoints are not
 deleted; a periodic checkpoint for the same step may be replaced:
@@ -180,13 +185,18 @@ temporary overrides for the training settings.
 * `prepare_dataset.py` — deterministic document splitting, tokenizer training, and token preprocessing.
 * `dataset.py` — NumPy `memmap` batches for one pre-split token file.
 * `model.py` — RoPE attention, RMSNorm, SwiGLU, and weight tying.
-* `train.py` — AdamW, warmup/cosine decay, accumulation, AMP, validation, and checkpoints.
+* `train.py` — AdamW, warmup/cosine decay, accumulation, AMP,
+  validation-only checkpoint selection, and checkpoints with no TEST loader
+  state.
 * `generate.py` — temperature/top-k/top-p/repetition-aware generation.
 * `chat.py` — a bounded-history local chat wrapper.
 * `benchmark.py` — actual forward/backward or inference throughput.
 * `training_data.txt` — the active sample corpus.
 * `train_tokens.bin`, `validation_tokens.bin`, `test_tokens.bin` — separate generated partitions.
-* `dataset_manifest.json` — split, tokenizer, preprocessing, and checksum metadata.
+* `dataset_manifest.json` — split, tokenizer, preprocessing, checksum, and
+  isolation metadata.
+* `evaluation/a321neo_behavioral_benchmark.json` — manually curated
+  A321neo/A320-family questions with expected key facts.
 * `checkpoints/` — periodic checkpoints and `best_model.pt`.
 
 ## Making it genuinely capable
@@ -200,7 +210,9 @@ For a useful assistant rather than a text continuation demo:
 3. Pretrain on raw text, then fine-tune on high-quality conversations.
 4. Format conversations with explicit system, user, assistant, and end-of-turn
    markers, and mask the loss so instruction tuning focuses on assistant text.
-5. Evaluate against a fixed prompt set after each training change.
+5. Evaluate against a fixed VALIDATION prompt set after each training change.
+6. Keep the final TEST set sealed until the model, hyperparameters, prompts,
+   and instruction-tuning decisions are frozen.
 
 The current repository includes a small sample corpus for reproducibility and
 smoke tests. It cannot produce a broadly knowledgeable assistant without a
@@ -325,10 +337,12 @@ checkpoints/best_model.pt
 ```
 
 Each periodic/best checkpoint stores model weights, optimizer state, step,
-configuration, and recent loss values. `best_model.pt` is only updated when a
-new validation loss is lower than the previous best. `train.py` prints the
-programmatically calculated parameter count, architecture settings, device,
-losses, token throughput, ETA, and (on CUDA) allocated GPU memory.
+configuration, and recent loss values. It stores TRAIN and VALIDATION loader
+state only; it contains no TEST loader or TEST RNG state. `best_model.pt` is
+only updated when a new validation loss is lower than the previous best.
+`train.py` prints the programmatically calculated parameter count, architecture
+settings, device, losses, token throughput, ETA, and (on CUDA) allocated GPU
+memory.
 
 ## Important limitations
 

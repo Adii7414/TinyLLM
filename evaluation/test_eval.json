@@ -2,9 +2,10 @@
   "context_length": 1024,
   "dataset_policy": "This set is final-only and must not be used for training or selection.",
   "dtype": "uint16",
+  "evaluation_set_id": "fixed-final-test-v1",
   "format": "fixed-evaluation-v1",
   "manifest_path": "dataset_manifest.json",
-  "manifest_sha256": "368b5627e6241b28c256fbd9e99cb57c32e28fbb52698ef122875d41e6c6b3d0",
+  "manifest_sha256": "917066d696eef58b3a77a745df74cdade5e438012512deee6c883e3c66900564",
   "max_windows": 256,
   "offsets": [
     0,
@@ -263,6 +264,14 @@
     253208,
     254209,
     255210
+  ],
+  "prohibited_uses": [
+    "tokenizer_training",
+    "model_training",
+    "hyperparameter_selection",
+    "checkpoint_selection",
+    "prompt_engineering",
+    "instruction_fine_tuning_decisions"
   ],
   "role": "final_test",
   "selection": "deterministic_evenly_spaced_offsets",

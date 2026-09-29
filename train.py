@@ -20,7 +20,7 @@ from evaluation import evaluate_fixed_token_loss, load_fixed_evaluation_set
 from model import GPTModel, describe_model
 from tokenizer import load_tokenizer, tokenizer_fingerprint
 
-CHECKPOINT_FORMAT = "training-checkpoint-v2"
+CHECKPOINT_FORMAT = "training-checkpoint-v3"
 SAFE_RESUME_OVERRIDES = {"training_steps"}
 
 
@@ -67,13 +67,17 @@ def sha256_file(path: str) -> str:
 
 
 def dataset_identity(path: str, manifest: Dict) -> Dict[str, Any]:
+    # A training checkpoint must be reproducible from training inputs only.
+    # In particular, do not include the final-test hash or the full manifest
+    # hash here: changing the held-out test set must not affect training or
+    # resumption.
+    tokenizer_metadata = manifest["tokenizer"]
     return {
-        "manifest_sha256": sha256_file(path),
         "format": manifest["format"],
-        "source_content_hash": manifest["source"]["content_hash"],
-        "split_hashes": {
+        "tokenizer_sha256": tokenizer_metadata["sha256"],
+        "training_split_hashes": {
             name: manifest["splits"][name]["sha256"]
-            for name in ("train", "validation", "test")
+            for name in ("train", "validation")
         },
     }
 
@@ -84,7 +88,6 @@ def make_config(args: argparse.Namespace) -> Config:
         "dataset_manifest_path",
         "tokenizer_path",
         "validation_evaluation_path",
-        "test_evaluation_path",
         "context_length",
         "embedding_dim",
         "num_layers",
@@ -283,7 +286,6 @@ def load_checkpoint(
     scheduler: LearningRateScheduler,
     train_data: TokenDataset,
     validation_data: TokenDataset,
-    test_data: TokenDataset,
     device: torch.device,
     config: Config,
 ) -> Tuple[int, float, Dict]:
@@ -305,7 +307,6 @@ def load_checkpoint(
         "python_rng_state",
         "train_dataset_rng_state",
         "validation_dataset_rng_state",
-        "test_dataset_rng_state",
     }
     missing_keys = sorted(required_keys - set(checkpoint))
     if missing_keys:
@@ -353,7 +354,6 @@ def load_checkpoint(
     scheduler.load_state_dict(checkpoint["scheduler_state"])
     train_data.rng.bit_generator.state = checkpoint["train_dataset_rng_state"]
     validation_data.rng.bit_generator.state = checkpoint["validation_dataset_rng_state"]
-    test_data.rng.bit_generator.state = checkpoint["test_dataset_rng_state"]
     torch.set_rng_state(checkpoint["torch_rng_state"])
     np.random.set_state(checkpoint["numpy_rng_state"])
     random.setstate(checkpoint["python_rng_state"])
@@ -372,7 +372,6 @@ def save_checkpoint(
     scheduler: LearningRateScheduler,
     train_data: TokenDataset,
     validation_data: TokenDataset,
-    test_data: TokenDataset,
     config: Config,
     step: int,
     train_loss: float,
@@ -396,7 +395,6 @@ def save_checkpoint(
         "python_rng_state": random.getstate(),
         "train_dataset_rng_state": train_data.rng.bit_generator.state,
         "validation_dataset_rng_state": validation_data.rng.bit_generator.state,
-        "test_dataset_rng_state": test_data.rng.bit_generator.state,
     }
     temporary_path = path + ".partial"
     try:
@@ -446,12 +444,6 @@ def main() -> None:
         "validation",
         config.context_length,
     )
-    test_evaluation_set = load_fixed_evaluation_set(
-        config.test_evaluation_path,
-        config.dataset_manifest_path,
-        "test",
-        config.context_length,
-    )
     if config.training_steps < 1 or config.batch_size < 1:
         raise ValueError("training_steps and batch_size must be positive")
     if config.gradient_accumulation_steps < 1:
@@ -477,12 +469,6 @@ def main() -> None:
         config.seed + 1,
         config.dataset_dtype,
     )
-    test_data = TokenDataset(
-        manifest["splits"]["test"]["path"],
-        config.context_length,
-        config.seed + 2,
-        config.dataset_dtype,
-    )
     model = GPTModel(config).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -497,7 +483,6 @@ def main() -> None:
     print(describe_model(model))
     print(
         f"Train windows: {len(train_data):,} | Validation windows: {len(val_data):,} | "
-        f"Test windows: {len(test_data):,} | "
         f"Effective batch: {config.batch_size * config.gradient_accumulation_steps}"
     )
 
@@ -513,7 +498,6 @@ def main() -> None:
             scheduler,
             train_data,
             val_data,
-            test_data,
             device,
             config,
         )
@@ -571,7 +555,6 @@ def main() -> None:
                     scheduler,
                     train_data,
                     val_data,
-                    test_data,
                     config,
                     step,
                     latest_train_loss,
@@ -614,7 +597,6 @@ def main() -> None:
                 scheduler,
                 train_data,
                 val_data,
-                test_data,
                 config,
                 step,
                 latest_train_loss,
@@ -623,14 +605,11 @@ def main() -> None:
             )
             print(f"Saved checkpoint: {path}", flush=True)
 
-    test_loss = estimate_validation_loss(
-        model, test_evaluation_set, config, device
-    )
     print(
-        f"Final test loss: {test_loss:.4f} | "
-        f"test perplexity: {math.exp(min(test_loss, 20.0)):.2f}"
+        "Training complete. The held-out test set was not loaded or evaluated. "
+        f"Run evaluation.py --mode final-test --checkpoint {config.best_checkpoint!r} "
+        "after all training decisions are finished."
     )
-    print(f"Training complete. Best model: {config.best_checkpoint}")
 
 
 if __name__ == "__main__":

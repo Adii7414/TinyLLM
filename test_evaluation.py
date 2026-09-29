@@ -4,6 +4,7 @@ import unittest
 
 from evaluation import (
     BEHAVIORAL_CATEGORIES,
+    load_manifest,
     load_fixed_evaluation_set,
     score_behavioral_answer,
     validate_behavioral_benchmark,
@@ -11,6 +12,18 @@ from evaluation import (
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_manifest_declares_three_disjoint_partitions_and_train_only_tokenizer(self) -> None:
+        manifest = load_manifest("dataset_manifest.json")
+        paths = [manifest["splits"][name]["path"] for name in ("train", "validation", "test")]
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertEqual(
+            manifest["tokenizer"]["training_source"],
+            "train_documents_only",
+        )
+        self.assertEqual(manifest["isolation"]["model_training_split"], "train")
+        self.assertEqual(manifest["isolation"]["checkpoint_selection_split"], "validation")
+        self.assertEqual(manifest["isolation"]["final_test_split"], "test")
+
     def test_fixed_validation_and_final_test_sets_are_distinct(self) -> None:
         validation = load_fixed_evaluation_set(
             "evaluation/validation_eval.json",
@@ -26,6 +39,16 @@ class EvaluationTests(unittest.TestCase):
         )
         self.assertEqual(validation["role"], "checkpoint_validation")
         self.assertEqual(final_test["role"], "final_test")
+        self.assertEqual(validation["evaluation_set_id"], "fixed-validation-v1")
+        self.assertEqual(final_test["evaluation_set_id"], "fixed-final-test-v1")
+        self.assertEqual(final_test["prohibited_uses"], [
+            "tokenizer_training",
+            "model_training",
+            "hyperparameter_selection",
+            "checkpoint_selection",
+            "prompt_engineering",
+            "instruction_fine_tuning_decisions",
+        ])
         self.assertNotEqual(validation["split"], final_test["split"])
         with self.assertRaisesRegex(ValueError, "not 'validation'"):
             load_fixed_evaluation_set(

@@ -117,6 +117,12 @@ def prepare_dataset(
         "validation": validation_output_path,
         "test": test_output_path,
     }
+    normalized_paths = [os.path.abspath(path) for path in split_paths.values()]
+    if len(set(normalized_paths)) != len(normalized_paths):
+        raise ValueError(
+            "Train, validation, and test outputs must be different files. "
+            "Separate files are required for dataset isolation."
+        )
     for path in split_paths.values():
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(tokenizer_path) or ".", exist_ok=True)
@@ -206,6 +212,18 @@ def prepare_dataset(
             "pad_token_id": tokenizer.pad_token_id,
             "training_sample_bytes": len(tokenizer_sample),
             "training_source": "train_documents_only",
+        },
+        "isolation": {
+            "partitions": "separate_document_disjoint_files",
+            "tokenizer_training_split": "train",
+            "model_training_split": "train",
+            "checkpoint_selection_split": "validation",
+            "final_test_split": "test",
+            "final_test_policy": (
+                "The test partition is evaluation-only and must not be used for "
+                "tokenizer training, model training, hyperparameter selection, "
+                "checkpoint selection, prompt engineering, or instruction-tuning decisions."
+            ),
         },
         "preprocessing": {
             "document_format": "blank_line_delimited_utf8",
