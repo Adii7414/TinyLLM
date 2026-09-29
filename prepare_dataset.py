@@ -20,6 +20,9 @@ TOKEN_DTYPE = "uint16"
 DEFAULT_TRAIN_RATIO = 0.90
 DEFAULT_VALIDATION_RATIO = 0.05
 DEFAULT_TEST_RATIO = 0.05
+TOKENIZER_TRAINING_ALGORITHM = "byte-subword-frequency-v1"
+TOKENIZER_MAX_PHRASE_LENGTH = 12
+TOKENIZER_MIN_FREQUENCY = 2
 
 
 def iter_documents(source_path: str) -> Iterator[bytes]:
@@ -154,7 +157,12 @@ def prepare_dataset(
             "or adjust the split ratios/seed."
         )
 
-    tokenizer = ByteSubwordTokenizer.train(bytes(tokenizer_sample), vocab_size=vocab_size)
+    tokenizer = ByteSubwordTokenizer.train(
+        bytes(tokenizer_sample),
+        vocab_size=vocab_size,
+        max_phrase_length=TOKENIZER_MAX_PHRASE_LENGTH,
+        min_frequency=TOKENIZER_MIN_FREQUENCY,
+    )
     tokenizer.save(tokenizer_path)
 
     temporary_paths = {name: path + ".partial" for name, path in split_paths.items()}
@@ -211,6 +219,11 @@ def prepare_dataset(
             "eos_token_id": tokenizer.eos_token_id,
             "pad_token_id": tokenizer.pad_token_id,
             "training_sample_bytes": len(tokenizer_sample),
+            "training_sample_sha256": hashlib.sha256(tokenizer_sample).hexdigest(),
+            "training_sample_limit_bytes": max_tokenizer_sample_bytes,
+            "training_algorithm": TOKENIZER_TRAINING_ALGORITHM,
+            "max_phrase_length": TOKENIZER_MAX_PHRASE_LENGTH,
+            "min_frequency": TOKENIZER_MIN_FREQUENCY,
             "training_source": "train_documents_only",
         },
         "isolation": {

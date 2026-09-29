@@ -5,7 +5,7 @@
   "evaluation_set_id": "fixed-validation-v1",
   "format": "fixed-evaluation-v1",
   "manifest_path": "dataset_manifest.json",
-  "manifest_sha256": "917066d696eef58b3a77a745df74cdade5e438012512deee6c883e3c66900564",
+  "manifest_sha256": "c7590cf09a1f8decd06a3d961f63b08ad60dbfea9f2ef787057e343ffb3f5153",
   "max_windows": 256,
   "offsets": [
     0,

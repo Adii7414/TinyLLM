@@ -46,6 +46,15 @@ token files:
 python prepare_dataset.py
 ```
 
+Verify the prepared artifacts before training. The verifier fails with all
+detected inconsistencies, including stale hashes, dtype/size mismatches,
+out-of-vocabulary IDs, source/split overlap, train-only tokenizer provenance,
+and EOS placement:
+
+```bash
+python verify_dataset.py
+```
+
 Put your own UTF-8 text in `training_data.txt`, or point the script at another
 file or directory. A file is interpreted as blank-line-delimited documents;
 each file in a directory is processed the same way. The preprocessing pass
@@ -205,6 +214,7 @@ temporary overrides for the training settings.
 * `config.py` — one central configuration dataclass.
 * `tokenizer.py` — dependency-free learned byte-subword tokenizer with byte fallback.
 * `prepare_dataset.py` — deterministic document splitting, tokenizer training, and token preprocessing.
+* `verify_dataset.py` — strict source, tokenizer, split, token-file, hash, and EOS verification.
 * `dataset.py` — NumPy `memmap` batches for one pre-split token file.
 * `model.py` — RoPE attention, RMSNorm, SwiGLU, and weight tying.
 * `train.py` — AdamW, warmup/cosine decay, accumulation, AMP,
