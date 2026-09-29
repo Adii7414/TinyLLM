@@ -16,31 +16,63 @@ import json
 import hashlib
 import os
 from collections import Counter
-from typing import Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 
 BYTE_VOCAB_SIZE = 256
 EOS_TOKEN_ID = 256
 PAD_TOKEN_ID = 257
 SPECIAL_TOKEN_COUNT = 2
+USER_TOKEN = "<|user|>"
+ASSISTANT_TOKEN = "<|assistant|>"
+END_TOKEN = "<|end|>"
+INSTRUCTION_SPECIAL_TOKENS = (USER_TOKEN, ASSISTANT_TOKEN, END_TOKEN)
 
 
 class ByteSubwordTokenizer:
     """Greedy longest-match byte tokenizer with a byte-level fallback."""
 
-    def __init__(self, tokens: List[bytes]) -> None:
+    def __init__(
+        self,
+        tokens: List[bytes],
+        special_tokens: Optional[Dict[str, int]] = None,
+    ) -> None:
         if len(tokens) < BYTE_VOCAB_SIZE + SPECIAL_TOKEN_COUNT:
             raise ValueError("Tokenizer vocabulary is too small.")
         if tokens[:BYTE_VOCAB_SIZE] != [bytes([value]) for value in range(BYTE_VOCAB_SIZE)]:
             raise ValueError("Tokenizer must start with the 256 byte fallback tokens.")
         if tokens[EOS_TOKEN_ID] != b"" or tokens[PAD_TOKEN_ID] != b"":
             raise ValueError("EOS and PAD tokens must be empty-byte special tokens.")
+        self.special_tokens = {
+            "<|eos|>": EOS_TOKEN_ID,
+            "<|pad|>": PAD_TOKEN_ID,
+        }
+        if special_tokens is not None:
+            self.special_tokens.update(special_tokens)
+        special_ids = set(self.special_tokens.values())
+        if any(
+            not isinstance(name, str) or not isinstance(token_id, int)
+            for name, token_id in self.special_tokens.items()
+        ):
+            raise ValueError("Special-token names must map to integer token IDs.")
+        if len(special_ids) != len(self.special_tokens):
+            raise ValueError("Special-token IDs must be unique.")
+        if any(token_id < 0 or token_id >= len(tokens) for token_id in special_ids):
+            raise ValueError("Special-token ID is outside the tokenizer vocabulary.")
+        if any(tokens[token_id] != b"" for token_id in special_ids):
+            raise ValueError("Special-token entries must have empty byte payloads.")
         self.tokens = tokens
         self.vocab_size = len(tokens)
         self.eos_token_id = EOS_TOKEN_ID
         self.pad_token_id = PAD_TOKEN_ID
         self._by_first_byte: List[List[tuple[bytes, int]]] = [[] for _ in range(256)]
-        for token_id, token in enumerate(tokens[BYTE_VOCAB_SIZE + SPECIAL_TOKEN_COUNT :], start=BYTE_VOCAB_SIZE + SPECIAL_TOKEN_COUNT):
+        for token_id, token in enumerate(tokens):
+            if token_id in special_ids:
+                continue
+            if not token:
+                raise ValueError(
+                    f"Non-special tokenizer entry {token_id} has an empty byte payload."
+                )
             self._by_first_byte[token[0]].append((token, token_id))
         for candidates in self._by_first_byte:
             candidates.sort(key=lambda item: len(item[0]), reverse=True)
@@ -104,7 +136,7 @@ class ByteSubwordTokenizer:
     def load(cls, path: str) -> "ByteSubwordTokenizer":
         with open(path, "r", encoding="utf-8") as file:
             payload = json.load(file)
-        if payload.get("format") != "byte-subword-v1":
+        if payload.get("format") not in {"byte-subword-v1", "byte-subword-v2"}:
             raise ValueError(f"Unsupported tokenizer format in {path!r}.")
         if payload.get("eos_token_id") != EOS_TOKEN_ID:
             raise ValueError(f"Tokenizer EOS ID does not match {path!r}.")
@@ -113,7 +145,10 @@ class ByteSubwordTokenizer:
         if not isinstance(payload.get("tokens"), list):
             raise ValueError(f"Tokenizer token table is missing in {path!r}.")
         tokens = [bytes.fromhex(value) for value in payload["tokens"]]
-        tokenizer = cls(tokens)
+        special_tokens = payload.get("special_tokens")
+        if special_tokens is not None and not isinstance(special_tokens, dict):
+            raise ValueError(f"Tokenizer special-token metadata is invalid in {path!r}.")
+        tokenizer = cls(tokens, special_tokens=special_tokens)
         if payload.get("vocab_size") != tokenizer.vocab_size:
             raise ValueError(f"Tokenizer metadata does not match {path!r}.")
         return tokenizer
@@ -122,10 +157,11 @@ class ByteSubwordTokenizer:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         temporary_path = path + ".partial"
         payload = {
-            "format": "byte-subword-v1",
+            "format": "byte-subword-v2",
             "vocab_size": self.vocab_size,
             "eos_token_id": self.eos_token_id,
             "pad_token_id": self.pad_token_id,
+            "special_tokens": self.special_tokens,
             "tokens": [token.hex() for token in self.tokens],
         }
         with open(temporary_path, "w", encoding="utf-8") as file:
@@ -153,18 +189,65 @@ class ByteSubwordTokenizer:
         return token_ids
 
     def encode(self, text: str, add_eos: bool = False) -> List[int]:
-        return self.encode_bytes(text.encode("utf-8"), add_eos=add_eos)
+        if not self.special_tokens:
+            return self.encode_bytes(text.encode("utf-8"), add_eos=add_eos)
+        markers = sorted(self.special_tokens, key=len, reverse=True)
+        token_ids: List[int] = []
+        position = 0
+        while position < len(text):
+            next_marker = min(
+                (
+                    (text.find(marker, position), marker)
+                    for marker in markers
+                    if text.find(marker, position) >= 0
+                ),
+                default=(len(text), ""),
+            )
+            marker_position, marker = next_marker
+            if marker_position > position:
+                token_ids.extend(self.encode_bytes(text[position:marker_position].encode("utf-8")))
+            if marker:
+                token_ids.append(self.special_tokens[marker])
+                position = marker_position + len(marker)
+            else:
+                position = len(text)
+        if add_eos:
+            token_ids.append(self.eos_token_id)
+        return token_ids
 
     def decode(self, token_ids: Iterable[int]) -> str:
         output = bytearray()
+        special_ids = set(self.special_tokens.values())
         for token_id in token_ids:
             token_id = int(token_id)
-            if token_id in {self.eos_token_id, self.pad_token_id}:
+            if token_id in special_ids:
                 continue
             if token_id < 0 or token_id >= len(self.tokens):
                 raise ValueError(f"Token ID {token_id} is outside the vocabulary.")
             output.extend(self.tokens[token_id])
         return bytes(output).decode("utf-8", errors="replace")
+
+    def add_special_tokens(self, names: Iterable[str]) -> "ByteSubwordTokenizer":
+        """Return a tokenizer with appended, non-byte control-token IDs."""
+        special_tokens = dict(self.special_tokens)
+        tokens = list(self.tokens)
+        for name in names:
+            if not name:
+                raise ValueError("Special-token names must not be empty.")
+            if name not in special_tokens:
+                special_tokens[name] = len(tokens)
+                tokens.append(b"")
+        return ByteSubwordTokenizer(tokens, special_tokens=special_tokens)
+
+    def special_token_id(self, name: str) -> int:
+        try:
+            return self.special_tokens[name]
+        except KeyError as error:
+            raise ValueError(f"Tokenizer does not define special token {name!r}.") from error
+
+    def generation_end_token_id(self) -> int:
+        """Return the response terminator when available, otherwise EOS."""
+        return self.special_tokens.get(END_TOKEN, self.eos_token_id)
 
 
 def load_tokenizer(path: str) -> ByteSubwordTokenizer:

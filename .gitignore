@@ -9,4 +9,9 @@ validation_tokens.bin
 test_tokens.bin
 dataset_manifest.json
 tokenizer.json
+instruction_tokenizer.json
+instruction_manifest.json
+instruction_train.jsonl
+instruction_validation.jsonl
 checkpoints/*.pt
+checkpoints/instruction_*.pt

@@ -49,7 +49,7 @@ def main() -> None:
             args.top_k,
             args.top_p,
             args.repetition_penalty,
-            tokenizer.eos_token_id,
+            tokenizer.generation_end_token_id(),
         )
         generated = tokenizer.decode(output_ids[len(prompt_ids) :])
         # Keep a compact transcript so old turns do not crowd out the newest one.

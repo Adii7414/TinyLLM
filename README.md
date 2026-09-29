@@ -210,6 +210,11 @@ temporary overrides for the training settings.
 * `train.py` — AdamW, warmup/cosine decay, accumulation, AMP,
   validation-only checkpoint selection, and checkpoints with no TEST loader
   state.
+* `instruction_data.jsonl` — curated conversational instruction examples.
+* `prepare_instruction_data.py` — role-token vocabulary extension and
+  deterministic instruction train/validation splitting.
+* `finetune.py` — assistant-only masked instruction fine-tuning and best
+  instruction checkpoint selection.
 * `generate.py` — temperature/top-k/top-p/repetition-aware generation.
 * `chat.py` — a bounded-history local chat wrapper.
 * `benchmark.py` — actual forward/backward or inference throughput.
@@ -235,6 +240,32 @@ For a useful assistant rather than a text continuation demo:
 5. Evaluate against a fixed VALIDATION prompt set after each training change.
 6. Keep the final TEST set sealed until the model, hyperparameters, prompts,
    and instruction-tuning decisions are frozen.
+
+## Instruction fine-tuning
+
+The repository includes a curated conversational dataset in
+`instruction_data.jsonl`. It covers factual, explanatory, comparison,
+scenario, troubleshooting, MCDU/FMGS, FCU/FMA, flight-planning, and simulator
+questions. Prepare it and run the separate fine-tuning stage with:
+
+```bash
+python prepare_instruction_data.py
+python finetune.py --checkpoint checkpoints/best_model.pt
+```
+
+Preparation creates real control-token IDs for `<|user|>`, `<|assistant|>`,
+and `<|end|>` instead of encoding those markers as ordinary text. Fine-tuning
+preserves the pretrained vocabulary prefix, uses a lower default learning rate
+(`5e-5` versus the pretraining default `3e-4`), and masks user prompt and
+role-prefix labels with `-100`. Assistant response tokens and `<|end|>` are
+supervised. The best instruction-validation checkpoint is saved to:
+
+```text
+checkpoints/instruction_best_model.pt
+```
+
+The final TEST split and final evaluation benchmark are not used for
+instruction data, validation, or checkpoint selection.
 
 The current repository includes a small sample corpus for reproducibility and
 smoke tests. It cannot produce a broadly knowledgeable assistant without a

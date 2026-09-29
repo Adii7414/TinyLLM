@@ -207,7 +207,7 @@ def main() -> None:
         args.top_k,
         args.top_p,
         args.repetition_penalty,
-        tokenizer.eos_token_id,
+        tokenizer.generation_end_token_id(),
     )
     print("\n" + tokenizer.decode(output_ids))
     print(f"\n[checkpoint={path}, device={device}]")
