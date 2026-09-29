@@ -88,6 +88,34 @@ Resume from the newest periodic checkpoint:
 python train.py --resume
 ```
 
+Create the immutable token-level evaluation windows for the current dataset:
+
+```bash
+python evaluation.py --mode create-fixed
+```
+
+Training uses only `evaluation/validation_eval.json` for checkpoint selection.
+The final test windows in `evaluation/test_eval.json` are never used for
+training, selection, or tuning.
+
+Evaluate a checkpoint with cross-entropy and perplexity reported separately:
+
+```bash
+python evaluation.py --mode validation --checkpoint checkpoints/best_model.pt
+python evaluation.py --mode final-test --checkpoint checkpoints/best_model.pt
+```
+
+Run the manually curated A321neo/A320-family behavioral benchmark:
+
+```bash
+python evaluation.py --mode behavioral --checkpoint checkpoints/best_model.pt
+```
+
+The behavioral report keeps relevance, factual correctness, completeness,
+hallucination risk, and question-following as separate dimensions. Automatic
+checks are transparent proxies and each answer is marked for expert review;
+there is no composite score.
+
 Start at step zero with new random weights. Existing checkpoints are not
 deleted; a periodic checkpoint for the same step may be replaced:
 

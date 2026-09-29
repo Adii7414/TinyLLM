@@ -16,6 +16,7 @@ import torch
 
 from config import Config, DEFAULT_CONFIG
 from dataset import TokenDataset
+from evaluation import evaluate_fixed_token_loss, load_fixed_evaluation_set
 from model import GPTModel, describe_model
 from tokenizer import load_tokenizer, tokenizer_fingerprint
 
@@ -82,6 +83,8 @@ def make_config(args: argparse.Namespace) -> Config:
     for key in (
         "dataset_manifest_path",
         "tokenizer_path",
+        "validation_evaluation_path",
+        "test_evaluation_path",
         "context_length",
         "embedding_dim",
         "num_layers",
@@ -168,19 +171,19 @@ def autocast_context(device: torch.device, dtype_name: Optional[str] = None):
 @torch.no_grad()
 def estimate_validation_loss(
     model: GPTModel,
-    dataset: TokenDataset,
+    evaluation_set: Dict[str, Any],
     config: Config,
     device: torch.device,
 ) -> float:
-    model.eval()
-    losses = []
-    for _ in range(config.eval_steps):
-        x, y = dataset.batch(config.batch_size, device)
-        with autocast_context(device, config.amp_dtype):
-            _, loss = model(x, y)
-        losses.append(float(loss.item()))
-    model.train()
-    return sum(losses) / len(losses)
+    return float(
+        evaluate_fixed_token_loss(
+            model,
+            evaluation_set,
+            config.batch_size,
+            device,
+            config.amp_dtype,
+        )["cross_entropy"]
+    )
 
 
 def learning_rate_at(
@@ -413,6 +416,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reset", action="store_true", help="ignore existing checkpoints and start at step 0")
     parser.add_argument("--dataset-manifest-path", dest="dataset_manifest_path")
     parser.add_argument("--tokenizer-path", dest="tokenizer_path")
+    parser.add_argument("--validation-evaluation-path")
+    parser.add_argument("--test-evaluation-path")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--embedding-dim", type=int)
     parser.add_argument("--num-layers", type=int)
@@ -435,6 +440,18 @@ def main() -> None:
     args = build_arg_parser().parse_args()
     config = make_config(args)
     manifest = load_dataset_manifest(config.dataset_manifest_path)
+    validation_evaluation_set = load_fixed_evaluation_set(
+        config.validation_evaluation_path,
+        config.dataset_manifest_path,
+        "validation",
+        config.context_length,
+    )
+    test_evaluation_set = load_fixed_evaluation_set(
+        config.test_evaluation_path,
+        config.dataset_manifest_path,
+        "test",
+        config.context_length,
+    )
     if config.training_steps < 1 or config.batch_size < 1:
         raise ValueError("training_steps and batch_size must be positive")
     if config.gradient_accumulation_steps < 1:
@@ -541,7 +558,9 @@ def main() -> None:
 
         should_evaluate = step == 1 or step % config.eval_interval == 0 or step == config.training_steps
         if should_evaluate:
-            latest_val_loss = estimate_validation_loss(model, val_data, config, device)
+            latest_val_loss = estimate_validation_loss(
+                model, validation_evaluation_set, config, device
+            )
             if latest_val_loss < best_val_loss:
                 best_val_loss = latest_val_loss
                 save_checkpoint(
@@ -604,7 +623,9 @@ def main() -> None:
             )
             print(f"Saved checkpoint: {path}", flush=True)
 
-    test_loss = estimate_validation_loss(model, test_data, config, device)
+    test_loss = estimate_validation_loss(
+        model, test_evaluation_set, config, device
+    )
     print(
         f"Final test loss: {test_loss:.4f} | "
         f"test perplexity: {math.exp(min(test_loss, 20.0)):.2f}"

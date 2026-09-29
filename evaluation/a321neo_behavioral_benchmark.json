@@ -1,0 +1,245 @@
+{
+  "format": "a320-behavioral-benchmark-v1",
+  "title": "A321neo/A320-family behavioral question benchmark",
+  "policy": {
+    "test_set_is_not_used": true,
+    "manual_curation": true,
+    "no_single_composite_score": true,
+    "safety_scope": "Conceptual study questions only. Exact aircraft procedures, limitations, and operational decisions require current approved aircraft and operator documentation."
+  },
+  "questions": [
+    {
+      "id": "factual-001",
+      "category": "factual",
+      "question": "What does NEO mean in A321neo, and what does the name identify?",
+      "topic_terms": ["neo", "a321neo"],
+      "expected_key_facts": [
+        {"fact": "NEO means New Engine Option.", "aliases": ["new engine option"]},
+        {"fact": "A321neo is an A320 Family aircraft variant.", "aliases": ["a320 family", "a320-family", "a320 family aircraft"]}
+      ],
+      "question_requirements": ["define NEO", "identify the aircraft family"],
+      "forbidden_claims": ["neo means new electric operation"]
+    },
+    {
+      "id": "factual-002",
+      "category": "factual",
+      "question": "What broad kind of aircraft is the Airbus A321neo?",
+      "topic_terms": ["a321neo", "narrow-body", "twin-engine"],
+      "expected_key_facts": [
+        {"fact": "The A321neo is a narrow-body commercial jet.", "aliases": ["narrow-body", "narrow body"]},
+        {"fact": "It has two engines.", "aliases": ["twin-engine", "twin engine", "two engines"]}
+      ],
+      "question_requirements": ["state the broad aircraft type"],
+      "forbidden_claims": ["it is a four-engine wide-body"]
+    },
+    {
+      "id": "why-001",
+      "category": "why",
+      "question": "Why should a pilot separate the selected state, active mode, and actual aircraft response?",
+      "topic_terms": ["selected", "active", "aircraft response", "fma"],
+      "expected_key_facts": [
+        {"fact": "The selected state is what the crew requests or enters.", "aliases": ["crew selects", "selected target", "pilot selects", "what the crew requests"]},
+        {"fact": "The active mode is what the aircraft is currently using.", "aliases": ["active mode", "mode currently", "currently active"]},
+        {"fact": "The aircraft response is what the aircraft actually does.", "aliases": ["aircraft response", "actual response", "what the aircraft does"]},
+        {"fact": "Separating them helps diagnose selection, mode, data, or system problems.", "aliases": ["diagnose", "selection", "mode", "data", "system problem"]}
+      ],
+      "question_requirements": ["explain why the three states differ", "give the diagnostic benefit"],
+      "forbidden_claims": ["the selected target always guarantees the aircraft response"]
+    },
+    {
+      "id": "why-002",
+      "category": "why",
+      "question": "Why does weight and balance matter for A321neo performance?",
+      "topic_terms": ["weight", "balance", "center of gravity", "performance"],
+      "expected_key_facts": [
+        {"fact": "Weight affects acceleration, climb, stopping, and available performance margins.", "aliases": ["weight affects", "acceleration", "climb", "stopping", "performance margin"]},
+        {"fact": "Center of gravity affects stability, control, and performance.", "aliases": ["center of gravity", "cg affects", "stability", "control"]},
+        {"fact": "Operational values must come from approved aircraft-specific performance data.", "aliases": ["approved performance", "aircraft-specific", "approved data", "current data"]}
+      ],
+      "question_requirements": ["describe weight effects", "describe balance effects", "state the data limitation"],
+      "forbidden_claims": ["a generic rule can replace the approved performance calculation"]
+    },
+    {
+      "id": "how-001",
+      "category": "how",
+      "question": "How does an autopilot work conceptually?",
+      "topic_terms": ["autopilot", "guidance target", "feedback", "control law"],
+      "expected_key_facts": [
+        {"fact": "The autopilot compares aircraft state with active guidance targets.", "aliases": ["aircraft state", "guidance target", "target and actual"]},
+        {"fact": "It uses control laws and feedback to command the aircraft.", "aliases": ["control laws", "control law", "feedback", "commands the aircraft"]},
+        {"fact": "The crew must monitor the mode and aircraft response.", "aliases": ["crew must monitor", "monitor the mode", "monitor aircraft response"]}
+      ],
+      "question_requirements": ["describe inputs", "describe the control mechanism", "include monitoring"],
+      "forbidden_claims": ["the autopilot removes the need for monitoring"]
+    },
+    {
+      "id": "how-002",
+      "category": "how",
+      "question": "How does the FMGS work at a conceptual level?",
+      "topic_terms": ["fmgs", "flight management", "navigation database", "guidance"],
+      "expected_key_facts": [
+        {"fact": "The FMGS combines route, navigation, performance, aircraft-state, and database information.", "aliases": ["route", "navigation", "performance", "aircraft state", "database"]},
+        {"fact": "It produces predictions and lateral or vertical guidance.", "aliases": ["predictions", "lateral", "vertical guidance", "guidance"]},
+        {"fact": "The exact result depends on aircraft standard, software, database, and inputs.", "aliases": ["aircraft standard", "software", "database", "inputs", "configuration"]}
+      ],
+      "question_requirements": ["explain the main inputs", "explain the outputs", "state configuration dependence"],
+      "forbidden_claims": ["the fmgs independently guarantees the aircraft will follow every plan"]
+    },
+    {
+      "id": "comparison-001",
+      "category": "comparisons",
+      "question": "What is the conceptual difference between managed and selected guidance?",
+      "topic_terms": ["managed", "selected", "fcu", "fma"],
+      "expected_key_facts": [
+        {"fact": "Managed guidance uses the flight-management profile or targets.", "aliases": ["managed uses", "flight-management profile", "fmgs profile", "managed target"]},
+        {"fact": "Selected guidance uses a crew-selected FCU target or mode.", "aliases": ["selected uses", "crew-selected", "fcu target", "selected target"]},
+        {"fact": "The FMA must be checked to confirm the active and armed modes.", "aliases": ["fma", "active and armed", "confirm the mode"]}
+      ],
+      "question_requirements": ["compare both concepts", "mention the cockpit confirmation"],
+      "forbidden_claims": ["managed is always safer than selected"]
+    },
+    {
+      "id": "comparison-002",
+      "category": "comparisons",
+      "question": "How should an A320 and A321neo comparison be framed without overgeneralizing?",
+      "topic_terms": ["a320", "a321neo", "family", "configuration"],
+      "expected_key_facts": [
+        {"fact": "They share A320 Family design and operating concepts.", "aliases": ["a320 family", "family commonality", "shared design", "common operating"]},
+        {"fact": "Size, weight, engines, configuration, and performance can differ.", "aliases": ["size", "weight", "engines", "configuration", "performance differ"]},
+        {"fact": "Exact procedures and limits must be checked for the aircraft standard and operator.", "aliases": ["aircraft standard", "operator", "exact procedures", "limits", "approved documentation"]}
+      ],
+      "question_requirements": ["state the commonality", "state important differences", "avoid universal claims"],
+      "forbidden_claims": ["all a320 family procedures and limits are identical"]
+    },
+    {
+      "id": "troubleshooting-001",
+      "category": "troubleshooting",
+      "question": "If the aircraft does not capture the expected altitude, what should be checked first in a simulator study?",
+      "topic_terms": ["altitude", "fma", "selected altitude", "mode", "troubleshoot"],
+      "expected_key_facts": [
+        {"fact": "Check the selected altitude and relevant FCU input.", "aliases": ["selected altitude", "fcu input", "altitude selector"]},
+        {"fact": "Check the FMA for active or armed vertical modes.", "aliases": ["fma", "active mode", "armed mode", "vertical mode"]},
+        {"fact": "Check constraints, aircraft energy or state, and data before blaming the system.", "aliases": ["constraints", "energy", "aircraft state", "data", "do not blame"]}
+      ],
+      "question_requirements": ["give an ordered diagnostic approach", "avoid declaring a system failure immediately"],
+      "forbidden_claims": ["the autopilot is definitely failed"]
+    },
+    {
+      "id": "troubleshooting-002",
+      "category": "troubleshooting",
+      "question": "What should be done when the FMA does not match what the crew expected?",
+      "topic_terms": ["fma", "expected", "mode", "selection"],
+      "expected_key_facts": [
+        {"fact": "Treat the FMA as the indication of active or armed modes, not the selector alone.", "aliases": ["fma", "active or armed", "selector alone", "active mode"]},
+        {"fact": "Recheck the selection, engagement conditions, constraints, and aircraft state.", "aliases": ["recheck", "engagement", "conditions", "constraints", "aircraft state"]},
+        {"fact": "Use the applicable approved procedure for an operational event.", "aliases": ["approved procedure", "applicable procedure", "operational event"]}
+      ],
+      "question_requirements": ["distinguish selection from active mode", "give safe next checks"],
+      "forbidden_claims": ["ignore the FMA if the selector looks correct"]
+    },
+    {
+      "id": "system-001",
+      "category": "system_explanations",
+      "question": "What information does the FMA provide and why is it important?",
+      "topic_terms": ["fma", "active", "armed", "guidance"],
+      "expected_key_facts": [
+        {"fact": "The FMA shows relevant active and armed guidance or autothrust modes.", "aliases": ["active", "armed", "guidance", "autothrust"]},
+        {"fact": "It lets the crew compare the aircraft mode with the intended selection.", "aliases": ["compare", "intended selection", "crew"]},
+        {"fact": "It is part of monitoring automation and does not replace procedural guidance.", "aliases": ["monitor automation", "monitoring", "does not replace", "procedure"]}
+      ],
+      "question_requirements": ["define the display purpose", "explain the monitoring use"],
+      "forbidden_claims": ["the fma is only a decorative status display"]
+    },
+    {
+      "id": "mcdu-fmgs-001",
+      "category": "mcdu_fmgs",
+      "question": "How are the MCDU and FMGS related at a conceptual level?",
+      "topic_terms": ["mcdu", "fmgs", "interface", "route", "performance"],
+      "expected_key_facts": [
+        {"fact": "The MCDU is a crew interface used to enter and review information for the FMGS.", "aliases": ["mcdu", "crew interface", "enter and review", "fmgs"]},
+        {"fact": "The FMGS uses route, performance, navigation, and aircraft-state information.", "aliases": ["route", "performance", "navigation", "aircraft state"]},
+        {"fact": "Entries and resulting guidance must be cross-checked against the current aircraft and database.", "aliases": ["cross-check", "current aircraft", "database", "resulting guidance"]}
+      ],
+      "question_requirements": ["explain the interface relationship", "include cross-checking"],
+      "forbidden_claims": ["the mcdu directly controls every actuator"]
+    },
+    {
+      "id": "mcdu-fmgs-002",
+      "category": "mcdu_fmgs",
+      "question": "Why must route and performance entries in the MCDU be checked rather than blindly accepted?",
+      "topic_terms": ["mcdu", "route", "performance", "database", "cross-check"],
+      "expected_key_facts": [
+        {"fact": "Incorrect entries or assumptions can produce incorrect predictions or guidance.", "aliases": ["incorrect entries", "incorrect predictions", "incorrect guidance", "assumptions"]},
+        {"fact": "Database status, aircraft configuration, and required inputs affect the result.", "aliases": ["database status", "configuration", "required inputs"]},
+        {"fact": "The crew should cross-check entries and indications with approved procedures and sources.", "aliases": ["cross-check", "approved procedures", "approved sources"]}
+      ],
+      "question_requirements": ["explain the risk", "name input dependencies", "state the verification action"],
+      "forbidden_claims": ["a successful entry proves the plan is operationally correct"]
+    },
+    {
+      "id": "fcu-fma-001",
+      "category": "fcu_fma",
+      "question": "What is the relationship between an FCU selection and the FMA indication?",
+      "topic_terms": ["fcu", "fma", "selection", "active mode"],
+      "expected_key_facts": [
+        {"fact": "The FCU is used for relevant crew-selected targets or mode selections.", "aliases": ["fcu", "crew-selected", "target", "mode selection"]},
+        {"fact": "The FMA indicates which modes are active or armed.", "aliases": ["fma", "active", "armed", "modes"]},
+        {"fact": "A selection alone does not prove that the expected mode is active.", "aliases": ["selection alone", "does not prove", "expected mode"]}
+      ],
+      "question_requirements": ["describe both cockpit elements", "explain why they must be compared"],
+      "forbidden_claims": ["the fcu display always shows the active mode"]
+    },
+    {
+      "id": "flight-phases-001",
+      "category": "flight_phases",
+      "question": "Why do automation priorities and monitoring tasks change across flight phases?",
+      "topic_terms": ["takeoff", "climb", "cruise", "descent", "approach", "flight phase"],
+      "expected_key_facts": [
+        {"fact": "Takeoff, climb, cruise, descent, approach, and landing have different energy and guidance priorities.", "aliases": ["takeoff", "climb", "cruise", "descent", "approach", "landing"]},
+        {"fact": "Targets, constraints, configuration, and active modes can change with the phase.", "aliases": ["targets", "constraints", "configuration", "active modes", "phase"]},
+        {"fact": "The crew must monitor the applicable phase-specific procedure and aircraft response.", "aliases": ["monitor", "phase-specific", "aircraft response", "procedure"]}
+      ],
+      "question_requirements": ["name multiple phases", "explain what changes", "include monitoring"],
+      "forbidden_claims": ["one automation mode is universally correct for every phase"]
+    },
+    {
+      "id": "performance-001",
+      "category": "performance",
+      "question": "Which inputs commonly affect takeoff or landing performance, and how should the result be used?",
+      "topic_terms": ["performance", "weight", "temperature", "wind", "runway", "configuration"],
+      "expected_key_facts": [
+        {"fact": "Weight, temperature, pressure or altitude, wind, runway characteristics, slope, obstacles, and configuration can affect performance.", "aliases": ["weight", "temperature", "pressure", "altitude", "wind", "runway", "slope", "obstacles", "configuration"]},
+        {"fact": "The result should come from approved aircraft-specific performance data.", "aliases": ["approved", "aircraft-specific", "performance data"]},
+        {"fact": "Generic model output should not be used as an operational clearance or limitation.", "aliases": ["not operational", "generic", "clearance", "limitation"]}
+      ],
+      "question_requirements": ["list several inputs", "state how to use the result safely"],
+      "forbidden_claims": ["a fixed generic distance is valid for every runway and weight"]
+    },
+    {
+      "id": "simulator-001",
+      "category": "simulator_scenarios",
+      "question": "In a simulator, an altitude capture looks unexpected. How should the scenario be analyzed?",
+      "topic_terms": ["simulator", "altitude", "fma", "selection", "aircraft response"],
+      "expected_key_facts": [
+        {"fact": "Record the selected target, active or armed FMA modes, and actual aircraft response.", "aliases": ["selected target", "fma", "active", "armed", "aircraft response"]},
+        {"fact": "Check aircraft state, constraints, inputs, and simulator or model configuration.", "aliases": ["aircraft state", "constraints", "inputs", "simulator", "model configuration"]},
+        {"fact": "Change one assumption or variable at a time and compare expected with observed behavior.", "aliases": ["one variable", "one assumption", "expected", "observed"]}
+      ],
+      "question_requirements": ["give a reproducible diagnostic method", "separate observation from interpretation"],
+      "forbidden_claims": ["simulator behavior alone proves the real aircraft has the same behavior"]
+    },
+    {
+      "id": "simulator-002",
+      "category": "simulator_scenarios",
+      "question": "A simulator route behaves differently after a flight-plan edit. What should the trainee investigate?",
+      "topic_terms": ["simulator", "route", "flight plan", "fmgs", "database"],
+      "expected_key_facts": [
+        {"fact": "Verify the edited route, constraints, discontinuities, and active guidance.", "aliases": ["route", "constraints", "discontinuities", "active guidance"]},
+        {"fact": "Check navigation database status and simulator aircraft or software version.", "aliases": ["navigation database", "database status", "aircraft version", "software version"]},
+        {"fact": "Do not assume the observed result is a real-aircraft procedure or limitation without authoritative confirmation.", "aliases": ["authoritative", "real aircraft", "procedure", "limitation", "do not assume"]}
+      ],
+      "question_requirements": ["identify route/data checks", "separate simulator behavior from operational authority"],
+      "forbidden_claims": ["the simulator is an authoritative replacement for current aircraft documentation"]
+    }
+  ]
+}
